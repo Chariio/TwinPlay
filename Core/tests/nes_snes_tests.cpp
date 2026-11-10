@@ -1,0 +1,1372 @@
+// Headless checks for the ares Famicom and Super Famicom cores.
+// The ROMs are built here. No commercial games.
+#include "dscore/EmulatorCore.hpp"
+#include "dscore/RaceRun.hpp"
+#include "dscore/RaceTimeline.hpp"
+#include "dscore/SnesTrace.hpp"
+#include <algorithm>
+#include <csignal>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <unistd.h>
+#include <vector>
+
+using namespace dscore;
+namespace dscore {
+void superFamicomApuDebug(u16* pc, u8 visible[4], u8* ram, u32 ramAddress, u32 ramCount);
+void superFamicomCpuDebug(u32* pc, u8* wram, u32 wramAddress, u32 wramCount);
+void dsp1Reset();
+void dsp1Write(uint8_t data);
+uint8_t dsp1Read();
+uint8_t dsp1Status();
+}
+static int failures = 0;
+static volatile const char* gTest = "startup";
+static void onAlarm(int) {
+    std::fprintf(stderr, "TIMEOUT %s\n", gTest ? gTest : "?");
+    std::fflush(stderr);
+    _Exit(2);
+}
+struct Test {
+    explicit Test(const char* name) {
+        gTest = name;
+        std::fprintf(stderr, "test %s\n", name);
+        std::fflush(stderr);
+    }
+    ~Test() { alarm(0); }
+};
+static void runFrames(EmulatorCore& core, int n) {
+    for (int i = 0; i < n; ++i) {
+        alarm(8);
+        core.runFrame();
+    }
+}
+#define CHECK(cond) do { if (!(cond)) { std::printf("FAIL %s:%d %s\n", __FILE__, __LINE__, #cond); ++failures; } } while (0)
+
+static void put(std::vector<u8>& m, size_t a, std::initializer_list<u8> b) {
+    for (u8 v : b) { if (a < m.size()) m[a++] = v; }
+}
+
+static std::vector<u8> nesSolid() {
+    std::vector<u8> rom(16 + 16384 + 8192, 0);
+    rom[0] = 'N'; rom[1] = 'E'; rom[2] = 'S'; rom[3] = 0x1A;
+    rom[4] = 1; rom[5] = 1; rom[6] = 0x01;
+    const size_t b = 16;
+    put(rom, b, {
+        0x78, 0xD8, 0xA2, 0xFF, 0x9A,
+        0xA9, 0x3F, 0x8D, 0x06, 0x20,
+        0xA9, 0x00, 0x8D, 0x06, 0x20,
+        0xA9, 0x16, 0x8D, 0x07, 0x20,
+        0xA9, 0x16, 0x8D, 0x07, 0x20,
+        0xA9, 0x20, 0x8D, 0x06, 0x20,
+        0xA9, 0x00, 0x8D, 0x06, 0x20,
+        0xA9, 0x01, 0xA2, 0x04, 0xA0, 0x00,
+        0x8D, 0x07, 0x20, 0xC8, 0xD0, 0xFA, 0xCA, 0xD0, 0xF7,
+        0xA9, 0x0E, 0x8D, 0x01, 0x20,
+        0x4C, 0x2A, 0x80,
+    });
+    rom[b + 0x3FFC] = 0x00; rom[b + 0x3FFD] = 0x80;
+    std::memset(rom.data() + 16 + 16384 + 16, 0xFF, 8);
+    return rom;
+}
+
+static std::vector<u8> nesPulse() {
+    std::vector<u8> rom(16 + 16384 + 8192, 0);
+    rom[0] = 'N'; rom[1] = 'E'; rom[2] = 'S'; rom[3] = 0x1A;
+    rom[4] = 1; rom[5] = 1;
+    put(rom, 16, {
+        0x78, 0xD8, 0xA2, 0xFF, 0x9A,
+        0xA9, 0x0F, 0x8D, 0x15, 0x40,
+        0xA9, 0xBF, 0x8D, 0x00, 0x40,
+        0xA9, 0x40, 0x8D, 0x02, 0x40,
+        0xA9, 0x00, 0x8D, 0x03, 0x40,
+        0x4C, 0x14, 0x80,
+    });
+    rom[16 + 0x3FFC] = 0x00; rom[16 + 0x3FFD] = 0x80;
+    return rom;
+}
+
+static std::vector<u8> mmc3Alive() {
+    std::vector<u8> rom(16 + 32768 + 16384, 0);
+    rom[0] = 'N'; rom[1] = 'E'; rom[2] = 'S'; rom[3] = 0x1A;
+    rom[4] = 2; rom[5] = 2; rom[6] = 0x40;
+    // Fixed bank is the last 16 KB, at file offset 0x4000, mapped at $C000.
+    put(rom, 16 + 0x4000, {
+        0x78, 0xD8, 0xA2, 0xFF, 0x9A,
+        0xA9, 0x1E, 0x8D, 0x01, 0x20,
+        0x4C, 0x08, 0xC0,
+    });
+    rom[16 + 0x7FFC] = 0x00; rom[16 + 0x7FFD] = 0xC0;
+    return rom;
+}
+
+static void stampSnes(std::vector<u8>& rom, u8 chip, u8 sram, u8 fx) {
+    std::memset(rom.data() + 0x7FC0, ' ', 21);
+    std::memcpy(rom.data() + 0x7FC0, "TWINPLAY SNES", 13);
+    rom[0x7FBD] = fx;
+    rom[0x7FD5] = 0x20;
+    rom[0x7FD6] = chip;
+    rom[0x7FD7] = 0x05;
+    rom[0x7FD8] = sram;
+    rom[0x7FD9] = 0x01;
+    rom[0x7FDC] = 0x00; rom[0x7FDD] = 0x00;
+    rom[0x7FDE] = 0xFF; rom[0x7FDF] = 0xFF;
+    rom[0x7FFC] = 0x00; rom[0x7FFD] = 0x80;
+}
+
+// Backdrop color is the XOR of every auto-joypad read. A WMDATA store each
+// vblank exercises the watch without changing the picture.
+static std::vector<u8> snesTimelineProbe() {
+    std::vector<u8> rom(0x8000, 0);
+    const u8 boot[] = {
+        0x78, 0x18, 0xFB, 0xE2, 0x30,
+        0xA9, 0x0F, 0x8D, 0x00, 0x21,
+        0xA9, 0x81, 0x8D, 0x00, 0x42,
+        0xA9, 0x00, 0x8D, 0x00, 0x00, 0x8D, 0x20, 0x00,
+        0x58, 0x80, 0xFE,
+    };
+    const u8 nmi[] = {
+        // Manual strobe. Auto-joypad is still shifting when NMI runs, so $4218 reads 0.
+        0xA9, 0x01, 0x8D, 0x16, 0x40,
+        0xA9, 0x00, 0x8D, 0x16, 0x40,
+        0xAD, 0x16, 0x40, 0x29, 0x01, 0x0D, 0x20, 0x00, 0x8D, 0x20, 0x00,
+        0xAF, 0x00, 0x00, 0x7E, 0x1A, 0x8F, 0x00, 0x00, 0x7E,
+        0xA9, 0x00, 0x8D, 0x21, 0x21,
+        0xAF, 0x00, 0x00, 0x7E, 0x8D, 0x22, 0x21,
+        0xAD, 0x20, 0x00, 0x8D, 0x22, 0x21,
+        0xA9, 0x00, 0x8D, 0x81, 0x21,
+        0xA9, 0x3C, 0x8D, 0x82, 0x21,
+        0xA9, 0x00, 0x8D, 0x83, 0x21,
+        0xAF, 0x00, 0x00, 0x7E, 0x8D, 0x80, 0x21,
+        0x40,
+    };
+    std::memcpy(rom.data(), boot, sizeof boot);
+    std::memcpy(rom.data() + 0x100, nmi, sizeof nmi);
+    stampSnes(rom, 0x00, 0, 0);
+    rom[0x7FEA] = 0x00;
+    rom[0x7FEB] = 0x81;
+    return rom;
+}
+
+// Green when the Super FX version register answers, red when it does not.
+static std::vector<u8> snesFxProbe(u8 chip, u8 fx) {
+    std::vector<u8> rom(0x8000, 0);
+    const u8 prog[] = {
+        0x78,0x18,0xFB,0xE2,0x30,
+        0xAD,0x3B,0x30,0xC9,0x04,0xD0,0x19,
+        0xA9,0x00,0x8D,0x21,0x21,0xA9,0xE0,0x8D,0x22,0x21,0xA9,0x03,0x8D,0x22,0x21,
+        0xA9,0x0F,0x8D,0x00,0x21,0x9C,0x2C,0x21,0x80,0xFE,
+        0xA9,0x00,0x8D,0x21,0x21,0xA9,0x1F,0x8D,0x22,0x21,0xA9,0x00,0x8D,0x22,0x21,
+        0xA9,0x0F,0x8D,0x00,0x21,0x9C,0x2C,0x21,0x80,0xFE,
+    };
+    std::memcpy(rom.data(), prog, sizeof prog);
+    stampSnes(rom, chip, 0, fx);
+    return rom;
+}
+
+// Plain board: green when $303B is not the Super FX version register.
+static std::vector<u8> snesPlainProbe(u8 chip, u8 sram) {
+    std::vector<u8> rom(0x8000, 0);
+    const u8 prog[] = {
+        0x78,0x18,0xFB,0xE2,0x30,
+        0xAD,0x3B,0x30,0xC9,0x04,0xF0,0x19,
+        0xA9,0x00,0x8D,0x21,0x21,0xA9,0xE0,0x8D,0x22,0x21,0xA9,0x03,0x8D,0x22,0x21,
+        0xA9,0x0F,0x8D,0x00,0x21,0x9C,0x2C,0x21,0x80,0xFE,
+        0xA9,0x00,0x8D,0x21,0x21,0xA9,0x1F,0x8D,0x22,0x21,0xA9,0x00,0x8D,0x22,0x21,
+        0xA9,0x0F,0x8D,0x00,0x21,0x9C,0x2C,0x21,0x80,0xFE,
+    };
+    std::memcpy(rom.data(), prog, sizeof prog);
+    stampSnes(rom, chip, sram, 0);
+    return rom;
+}
+
+// 512 KiB HiROM DSP image matching a real Super Mario Kart header.
+// $7FC0 is garbage (map $00, chip $F4, reset $0000). The only valid header is $FFC0:
+// map $31, chip $05, ROM $09, SRAM $01, complement $14BB, checksum $EB44, reset $FF70.
+// The program at file $FF70 (CPU $00:FF70 on a real HiROM map) reads DSP status at
+// $7000 and round-trips a byte through SRAM at $206000.
+static std::vector<u8> snesMarioKartShape() {
+    std::vector<u8> rom(0x80000, 0);
+    std::memset(rom.data() + 0x7FC0, 0x01, 21);
+    rom[0x7FD5] = 0x00;
+    rom[0x7FD6] = 0xF4;
+    rom[0x7FD7] = 0x00;
+    rom[0x7FD8] = 0xE4;
+    rom[0x7FD9] = 0x02;
+    rom[0x7FDC] = 0x00; rom[0x7FDD] = 0x00;
+    rom[0x7FDE] = 0x00; rom[0x7FDF] = 0x00;
+    rom[0x7FFC] = 0x00; rom[0x7FFD] = 0x00;
+    std::memset(rom.data() + 0xFFC0, ' ', 21);
+    std::memcpy(rom.data() + 0xFFC0, "SUPER MARIO KART", 16);
+    rom[0xFFD5] = 0x31;
+    rom[0xFFD6] = 0x05;
+    rom[0xFFD7] = 0x09;
+    rom[0xFFD8] = 0x01;
+    rom[0xFFD9] = 0x01;
+    rom[0xFFDC] = 0xBB; rom[0xFFDD] = 0x14;
+    rom[0xFFDE] = 0x44; rom[0xFFDF] = 0xEB;
+    rom[0xFFFC] = 0x70; rom[0xFFFD] = 0xFF;
+    const u8 prog[] = {
+        0x78, 0x18, 0xFB, 0xE2, 0x30,
+        0xAF, 0x00, 0x70, 0x00,
+        0x8F, 0x00, 0x00, 0x00,
+        0xA9, 0x5A,
+        0x8F, 0x00, 0x60, 0x20,
+        0xAF, 0x00, 0x60, 0x20,
+        0x8F, 0x01, 0x00, 0x00,
+        0x80, 0xFE,
+    };
+    std::memcpy(rom.data() + 0xFF70, prog, sizeof prog);
+    return rom;
+}
+
+// Super FX go-bit with RON left clear. runFrame must return; the old wait called
+// step() from inside read() and never came back.
+static std::vector<u8> snesFxGoWithoutRon() {
+    std::vector<u8> rom(0x8000, 0);
+    const u8 prog[] = {
+        0x78, 0x18, 0xFB, 0xE2, 0x30,
+        0xA9, 0x00, 0x8D, 0x21, 0x21, 0xA9, 0xE0, 0x8D, 0x22, 0x21, 0xA9, 0x03, 0x8D, 0x22, 0x21,
+        0xA9, 0x0F, 0x8D, 0x00, 0x21, 0x9C, 0x2C, 0x21,
+        0xA9, 0x20, 0x8D, 0x30, 0x30,
+        0x80, 0xFE,
+    };
+    std::memcpy(rom.data(), prog, sizeof prog);
+    stampSnes(rom, 0x13, 0, 0);
+    return rom;
+}
+
+// Lo slot is empty ($00 map, chip $F4). Hi slot is a real fast-HiROM header.
+static std::vector<u8> snesHiWins() {
+    std::vector<u8> rom(0x10000, 0);
+    rom[0x7FD5] = 0x00;
+    rom[0x7FD6] = 0xF4;
+    std::memset(rom.data() + 0xFFC0, ' ', 21);
+    std::memcpy(rom.data() + 0xFFC0, "DONKEY KONG COUNTRY", 19);
+    rom[0xFFD5] = 0x31;
+    rom[0xFFD6] = 0x02;
+    rom[0xFFD7] = 0x06;
+    rom[0xFFD8] = 0x03;
+    rom[0xFFDC] = 0x00; rom[0xFFDD] = 0x00;
+    rom[0xFFDE] = 0xFF; rom[0xFFDF] = 0xFF;
+    rom[0xFFFC] = 0x00; rom[0xFFFD] = 0x80;
+    rom[0] = 0x78;
+    return rom;
+}
+
+// A real LoROM header must beat a HiROM-looking map byte with no checksum or title.
+static std::vector<u8> snesLoHolds() {
+    std::vector<u8> rom(0x10000, 0);
+    stampSnes(rom, 0x00, 0, 0);
+    rom[0xFFD5] = 0x31;
+    rom[0xFFD6] = 0xF4;
+    return rom;
+}
+
+// DSP data port multiply: 0x4000 * 0x4000 -> 0x2000, then the usual green backdrop.
+static std::vector<u8> snesDspMultiply() {
+    std::vector<u8> rom(0x8000, 0);
+    const u8 prog[] = {
+        0x78, 0x18, 0xFB, 0xE2, 0x30,
+        // Opcode $00 is one byte. The two factors are 16-bit little-endian words.
+        0xA9, 0x00, 0x8F, 0x00, 0x80, 0x30,
+        0xA9, 0x00, 0x8F, 0x00, 0x80, 0x30,
+        0xA9, 0x40, 0x8F, 0x00, 0x80, 0x30,
+        0xA9, 0x00, 0x8F, 0x00, 0x80, 0x30,
+        0xA9, 0x40, 0x8F, 0x00, 0x80, 0x30,
+        0xAF, 0x00, 0x80, 0x30, 0x8F, 0x00, 0x00, 0x00,
+        0xAF, 0x00, 0x80, 0x30, 0x8F, 0x01, 0x00, 0x00,
+        0xAF, 0x00, 0x00, 0x00, 0xC9, 0x00, 0xD0, 0x20,
+        0xAF, 0x01, 0x00, 0x00, 0xC9, 0x20, 0xD0, 0x18,
+        0xA9, 0x00, 0x8D, 0x21, 0x21, 0xA9, 0xE0, 0x8D, 0x22, 0x21, 0xA9, 0x03, 0x8D, 0x22, 0x21,
+        0xA9, 0x0F, 0x8D, 0x00, 0x21, 0x9C, 0x2C, 0x21, 0x80, 0xFE,
+        0xA9, 0x00, 0x8D, 0x21, 0x21, 0xA9, 0x1F, 0x8D, 0x22, 0x21, 0xA9, 0x00, 0x8D, 0x22, 0x21,
+        0xA9, 0x0F, 0x8D, 0x00, 0x21, 0x9C, 0x2C, 0x21, 0x80, 0xFE,
+    };
+    std::memcpy(rom.data(), prog, sizeof prog);
+    stampSnes(rom, 0x03, 0, 0);
+    return rom;
+}
+
+static std::vector<u8> nesMapper(int mapper, int prgBanks, bool battery, u8 byte8, u8 byte9, u8 byte10, u8 byte12) {
+    size_t prg = (size_t)prgBanks * 16384;
+    std::vector<u8> rom(16 + prg, 0);
+    rom[0] = 'N'; rom[1] = 'E'; rom[2] = 'S'; rom[3] = 0x1A;
+    rom[4] = (u8)prgBanks;
+    rom[6] = (u8)(((mapper & 0x0F) << 4) | (battery ? 0x02 : 0));
+    rom[7] = (u8)(mapper & 0xF0);
+    rom[8] = byte8; rom[9] = byte9; rom[10] = byte10; rom[12] = byte12;
+    // Last 8 KB holds the reset program (MMC5 bank 3 is $FF, NROM mirrors it too).
+    size_t code = 16 + prg - 8192;
+    put(rom, code, {
+        0x78, 0xD8, 0xA2, 0xFF, 0x9A,
+        0xA9, 0x1E, 0x8D, 0x01, 0x20,
+        0x4C, 0x08, 0xE0,
+    });
+    rom[16 + prg - 4] = 0x00; rom[16 + prg - 3] = 0xE0;
+    return rom;
+}
+
+static std::vector<u8> snesRed() {
+    std::vector<u8> rom(0x8000, 0);
+    put(rom, 0, {
+        0x78, 0x18, 0xFB, 0xE2, 0x30,
+        0xA9, 0x00, 0x8D, 0x21, 0x21,
+        0xA9, 0x1F, 0x8D, 0x22, 0x21,
+        0xA9, 0x00, 0x8D, 0x22, 0x21,
+        0xA9, 0x0F, 0x8D, 0x00, 0x21,
+        0x9C, 0x2C, 0x21,
+        0x80, 0xFE,
+    });
+    std::memset(rom.data() + 0x7FC0, ' ', 21);
+    std::memcpy(rom.data() + 0x7FC0, "TWINPLAY SNES", 13);
+    rom[0x7FD5] = 0x20;
+    rom[0x7FD7] = 0x05;
+    rom[0x7FD9] = 0x01;
+    rom[0x7FDC] = 0x00; rom[0x7FDD] = 0x00;
+    rom[0x7FDE] = 0xFF; rom[0x7FDF] = 0xFF;
+    rom[0x7FFC] = 0x00; rom[0x7FFD] = 0x80;
+    return rom;
+}
+
+static int nonBlack(const u32* p, int w, int h) {
+    int n = 0;
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; x += 8)
+            if ((p[y * w + x] & 0x00FFFFFF) != 0) ++n;
+    return n;
+}
+
+static int greenPixels(const u32* p, int w, int h) {
+    int n = 0;
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; x += 8) {
+            u32 c = p[y * w + x];
+            int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+            if (g > 80 && g > r + 40 && g > b + 40) ++n;
+        }
+    return n;
+}
+
+// Commercial SPC700 upload, matching the documented sequence:
+// wait for $BBAA, kick $CC, echo each index, end a block by writing
+// last_echo+2, then do it again, then start the program with port1 = 0
+// and wait for that index to be echoed. The first block is 260 bytes so
+// the counter wraps. The SPC program stores $42; only then is the
+// backdrop turned green. A missed echo leaves it red.
+static std::vector<u8> snesIpl() {
+    static const u8 prog[] = {
+        0x78,0x18,0xFB,0xC2,0x10,0xE2,0x20,0xA9,0x00,0x8D,0x21,0x21,0xA9,0x1F,0x8D,0x22,
+        0x21,0xA9,0x00,0x8D,0x22,0x21,0xA9,0x0F,0x8D,0x00,0x21,0x9C,0x2C,0x21,0xC2,0x20,
+        0xA9,0xAA,0xBB,0xCD,0x40,0x21,0xD0,0xFB,0xE2,0x20,0xA9,0x00,0x8D,0x42,0x21,0xA9,
+        0x03,0x8D,0x43,0x21,0xA9,0x01,0x8D,0x41,0x21,0xA9,0xCC,0x8D,0x40,0x21,0xCD,0x40,
+        0x21,0xD0,0xFB,0xA2,0x00,0x00,0xBD,0xCD,0x80,0x8D,0x41,0x21,0x8A,0x8D,0x40,0x21,
+        0xCD,0x40,0x21,0xD0,0xFB,0xE8,0xE0,0x04,0x01,0xD0,0xEB,0xA9,0x00,0x8D,0x42,0x21,
+        0xA9,0x02,0x8D,0x43,0x21,0xA9,0x01,0x8D,0x41,0x21,0xAD,0x40,0x21,0x1A,0x1A,0xD0,
+        0x01,0x1A,0x8D,0x40,0x21,0xCD,0x40,0x21,0xD0,0xFB,0xA2,0x00,0x00,0xBD,0xC7,0x80,
+        0x8D,0x41,0x21,0x8A,0x8D,0x40,0x21,0xCD,0x40,0x21,0xD0,0xFB,0xE8,0xE0,0x06,0x00,
+        0xD0,0xEB,0xA9,0x00,0x8D,0x42,0x21,0xA9,0x02,0x8D,0x43,0x21,0x9C,0x41,0x21,0xAD,
+        0x40,0x21,0x1A,0x1A,0xD0,0x01,0x1A,0x8D,0x40,0x21,0xCD,0x40,0x21,0xD0,0xFB,0xAD,
+        0x40,0x21,0xC9,0x42,0xD0,0xF9,0xA9,0x00,0x8D,0x21,0x21,0xA9,0xE0,0x8D,0x22,0x21,
+        0xA9,0x03,0x8D,0x22,0x21,0x80,0xFE,0xE8,0x42,0xC4,0xF4,0x2F,0xFE,0x01,0x04,0x07,
+        0x0A,0x0D,0x10,0x13,0x16,0x19,0x1C,0x1F,0x22,0x25,0x28,0x2B,0x2E,0x31,0x34,0x37,
+        0x3A,0x3D,0x40,0x43,0x46,0x49,0x4C,0x4F,0x52,0x55,0x58,0x5B,0x5E,0x61,0x64,0x67,
+        0x6A,0x6D,0x70,0x73,0x76,0x79,0x7C,0x7F,0x82,0x85,0x88,0x8B,0x8E,0x91,0x94,0x97,
+        0x9A,0x9D,0xA0,0xA3,0xA6,0xA9,0xAC,0xAF,0xB2,0xB5,0xB8,0xBB,0xBE,0xC1,0xC4,0xC7,
+        0xCA,0xCD,0xD0,0xD3,0xD6,0xD9,0xDC,0xDF,0xE2,0xE5,0xE8,0xEB,0xEE,0xF1,0xF4,0xF7,
+        0xFA,0xFD,0x00,0x03,0x06,0x09,0x0C,0x0F,0x12,0x15,0x18,0x1B,0x1E,0x21,0x24,0x27,
+        0x2A,0x2D,0x30,0x33,0x36,0x39,0x3C,0x3F,0x42,0x45,0x48,0x4B,0x4E,0x51,0x54,0x57,
+        0x5A,0x5D,0x60,0x63,0x66,0x69,0x6C,0x6F,0x72,0x75,0x78,0x7B,0x7E,0x81,0x84,0x87,
+        0x8A,0x8D,0x90,0x93,0x96,0x99,0x9C,0x9F,0xA2,0xA5,0xA8,0xAB,0xAE,0xB1,0xB4,0xB7,
+        0xBA,0xBD,0xC0,0xC3,0xC6,0xC9,0xCC,0xCF,0xD2,0xD5,0xD8,0xDB,0xDE,0xE1,0xE4,0xE7,
+        0xEA,0xED,0xF0,0xF3,0xF6,0xF9,0xFC,0xFF,0x02,0x05,0x08,0x0B,0x0E,0x11,0x14,0x17,
+        0x1A,0x1D,0x20,0x23,0x26,0x29,0x2C,0x2F,0x32,0x35,0x38,0x3B,0x3E,0x41,0x44,0x47,
+        0x4A,0x4D,0x50,0x53,0x56,0x59,0x5C,0x5F,0x62,0x65,0x68,0x6B,0x6E,0x71,0x74,0x77,
+        0x7A,0x7D,0x80,0x83,0x86,0x89,0x8C,0x8F,0x92,0x95,0x98,0x9B,0x9E,0xA1,0xA4,0xA7,
+        0xAA,0xAD,0xB0,0xB3,0xB6,0xB9,0xBC,0xBF,0xC2,0xC5,0xC8,0xCB,0xCE,0xD1,0xD4,0xD7,
+        0xDA,0xDD,0xE0,0xE3,0xE6,0xE9,0xEC,0xEF,0xF2,0xF5,0xF8,0xFB,0xFE,0x01,0x04,0x07,
+        0x0A,
+    };
+    std::vector<u8> rom(0x8000, 0);
+    std::memcpy(rom.data(), prog, sizeof prog);
+    std::memset(rom.data() + 0x7FC0, ' ', 21);
+    std::memcpy(rom.data() + 0x7FC0, "TWINPLAY IPL", 12);
+    rom[0x7FD5] = 0x20;
+    rom[0x7FD7] = 0x05;
+    rom[0x7FDC] = 0x00; rom[0x7FDD] = 0x00;
+    rom[0x7FDE] = 0xFF; rom[0x7FDF] = 0xFF;
+    rom[0x7FFC] = 0x00; rom[0x7FFD] = 0x80;
+    return rom;
+}
+
+// Commercial uploaders only use $CC for the first kick and for a jump
+// back to $FFC9. Later blocks are ended with index+4 (ADC #3 while carry
+// is still set from the compare) and port 1 nonzero; port 1 == 0 with that
+// kick means jump. This ROM writes $FF once $BBAA is visible, sends three
+// blocks (the middle one is 300 bytes so the index wraps), records A/X/Y/P
+// at the jump, re-enters through $FFC9, then does a second two-block upload.
+// The backdrop turns green only after that second program stores $77.
+static std::vector<u8> snesIplReentry() {
+    static const u8 prog[] = {
+        0x78,0x18,0xFB,0xC2,0x30,0xA9,0xFF,0x01,0x1B,0xE2,0x20,0x9C,0x21,0x21,0xA9,0x1F,
+        0x8D,0x22,0x21,0x9C,0x22,0x21,0xA9,0x0F,0x8D,0x00,0x21,0xC2,0x20,0xA9,0xAA,0xBB,
+        0xCD,0x40,0x21,0xD0,0xFB,0xE2,0x20,0xA9,0xFF,0x8D,0x40,0x21,0xC2,0x20,0xA9,0xAA,
+        0xBB,0xCD,0x40,0x21,0xD0,0xFB,0xE2,0x20,0xA9,0xEF,0x85,0x00,0xA9,0x80,0x85,0x01,
+        0x64,0x02,0x20,0x76,0x80,0xC2,0x20,0xA9,0xAA,0xBB,0xCD,0x40,0x21,0xD0,0xFB,0xE2,
+        0x20,0xA9,0x40,0x85,0x00,0xA9,0x82,0x85,0x01,0x64,0x02,0x20,0x76,0x80,0xE2,0x20,
+        0xAD,0x40,0x21,0xC9,0x77,0xD0,0xF9,0x9C,0x21,0x21,0xA9,0xE0,0x8D,0x22,0x21,0xA9,
+        0x03,0x8D,0x22,0x21,0x80,0xFE,0x08,0xC2,0x30,0xA0,0x00,0x00,0xA9,0xAA,0xBB,0xCD,
+        0x40,0x21,0xD0,0xFB,0xE2,0x20,0xA9,0xCC,0x80,0x30,0xB7,0x00,0xC8,0xEB,0xA9,0x00,
+        0x80,0x15,0xEB,0xB7,0x00,0xC8,0xC0,0x00,0x80,0xD0,0x05,0xA0,0x00,0x00,0xE6,0x02,
+        0xEB,0xCD,0x40,0x21,0xD0,0xFB,0x1A,0xC2,0x20,0x8D,0x40,0x21,0xE2,0x20,0xCA,0xD0,
+        0xE1,0xCD,0x40,0x21,0xD0,0xFB,0x69,0x03,0xF0,0xFC,0x48,0xC2,0x20,0xB7,0x00,0xC8,
+        0xC8,0xAA,0xB7,0x00,0xC8,0xC8,0x8D,0x42,0x21,0xE2,0x20,0xE0,0x01,0x00,0xA9,0x00,
+        0x2A,0x8D,0x41,0x21,0x69,0x7F,0x68,0x8D,0x40,0x21,0xCD,0x40,0x21,0xD0,0xFB,0x70,
+        0xA9,0x9C,0x40,0x21,0x9C,0x41,0x21,0x9C,0x42,0x21,0x9C,0x43,0x21,0x28,0x60,0x04,
+        0x00,0x00,0x02,0x11,0x22,0x33,0x44,0x2C,0x01,0x00,0x03,0x00,0x07,0x0E,0x15,0x1C,
+        0x23,0x2A,0x31,0x38,0x3F,0x46,0x4D,0x54,0x5B,0x62,0x69,0x70,0x77,0x7E,0x85,0x8C,
+        0x93,0x9A,0xA1,0xA8,0xAF,0xB6,0xBD,0xC4,0xCB,0xD2,0xD9,0xE0,0xE7,0xEE,0xF5,0xFC,
+        0x03,0x0A,0x11,0x18,0x1F,0x26,0x2D,0x34,0x3B,0x42,0x49,0x50,0x57,0x5E,0x65,0x6C,
+        0x73,0x7A,0x81,0x88,0x8F,0x96,0x9D,0xA4,0xAB,0xB2,0xB9,0xC0,0xC7,0xCE,0xD5,0xDC,
+        0xE3,0xEA,0xF1,0xF8,0xFF,0x06,0x0D,0x14,0x1B,0x22,0x29,0x30,0x37,0x3E,0x45,0x4C,
+        0x53,0x5A,0x61,0x68,0x6F,0x76,0x7D,0x84,0x8B,0x92,0x99,0xA0,0xA7,0xAE,0xB5,0xBC,
+        0xC3,0xCA,0xD1,0xD8,0xDF,0xE6,0xED,0xF4,0xFB,0x02,0x09,0x10,0x17,0x1E,0x25,0x2C,
+        0x33,0x3A,0x41,0x48,0x4F,0x56,0x5D,0x64,0x6B,0x72,0x79,0x80,0x87,0x8E,0x95,0x9C,
+        0xA3,0xAA,0xB1,0xB8,0xBF,0xC6,0xCD,0xD4,0xDB,0xE2,0xE9,0xF0,0xF7,0xFE,0x05,0x0C,
+        0x13,0x1A,0x21,0x28,0x2F,0x36,0x3D,0x44,0x4B,0x52,0x59,0x60,0x67,0x6E,0x75,0x7C,
+        0x83,0x8A,0x91,0x98,0x9F,0xA6,0xAD,0xB4,0xBB,0xC2,0xC9,0xD0,0xD7,0xDE,0xE5,0xEC,
+        0xF3,0xFA,0x01,0x08,0x0F,0x16,0x1D,0x24,0x2B,0x32,0x39,0x40,0x47,0x4E,0x55,0x5C,
+        0x63,0x6A,0x71,0x78,0x7F,0x86,0x8D,0x94,0x9B,0xA2,0xA9,0xB0,0xB7,0xBE,0xC5,0xCC,
+        0xD3,0xDA,0xE1,0xE8,0xEF,0xF6,0xFD,0x04,0x0B,0x12,0x19,0x20,0x27,0x2E,0x35,0x3C,
+        0x43,0x4A,0x51,0x58,0x5F,0x66,0x6D,0x74,0x7B,0x82,0x89,0x90,0x97,0x9E,0xA5,0xAC,
+        0xB3,0xBA,0xC1,0xC8,0xCF,0xD6,0xDD,0xE4,0xEB,0xF2,0xF9,0x00,0x07,0x0E,0x15,0x1C,
+        0x23,0x2A,0x31,0x38,0x3F,0x46,0x4D,0x54,0x5B,0x62,0x69,0x70,0x77,0x7E,0x85,0x8C,
+        0x93,0x9A,0xA1,0xA8,0xAF,0xB6,0xBD,0xC4,0xCB,0xD2,0xD9,0xE0,0xE7,0xEE,0xF5,0xFC,
+        0x03,0x0A,0x11,0x18,0x1F,0x26,0x2D,0x11,0x00,0x00,0x05,0xC5,0x00,0x01,0xC9,0x01,
+        0x01,0xCC,0x02,0x01,0x0D,0xAE,0xC5,0x03,0x01,0x5F,0xC9,0xFF,0x00,0x00,0x00,0x05,
+        0x10,0x00,0x00,0x06,0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,
+        0x0C,0x0D,0x0E,0x0F,0x06,0x00,0x00,0x07,0xE8,0x77,0xC4,0xF4,0x2F,0xFE,0x00,0x00,
+        0x00,0x07,
+    };
+    std::vector<u8> rom(0x8000, 0);
+    std::memcpy(rom.data(), prog, sizeof prog);
+    std::memset(rom.data() + 0x7FC0, ' ', 21);
+    std::memcpy(rom.data() + 0x7FC0, "TWINPLAY IPL2", 13);
+    rom[0x7FD5] = 0x20;
+    rom[0x7FD7] = 0x05;
+    rom[0x7FDC] = 0x00; rom[0x7FDD] = 0x00;
+    rom[0x7FDE] = 0xFF; rom[0x7FDF] = 0xFF;
+    rom[0x7FFC] = 0x00; rom[0x7FFD] = 0x80;
+    return rom;
+}
+
+// blargg's NES CPU tests are public domain. They report through $6000
+// (0x00 pass, 0x01-0x7F fail, 0x80 still running) and a message at $6004.
+static void runBlargg(const std::string& path) {
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) { std::printf("FAIL could not open %s\n", path.c_str()); ++failures; return; }
+    std::vector<u8> rom;
+    std::fseek(f, 0, SEEK_END);
+    long n = std::ftell(f);
+    std::rewind(f);
+    if (n > 0) {
+        rom.resize((size_t)n);
+        if (std::fread(rom.data(), 1, rom.size(), f) != rom.size()) rom.clear();
+    }
+    std::fclose(f);
+    std::string err;
+    auto core = createCore(CoreKind::NES);
+    if (!core->loadROM(rom.data(), rom.size(), err)) {
+        std::printf("FAIL %s: %s\n", path.c_str(), err.c_str());
+        ++failures;
+        return;
+    }
+    std::fprintf(stderr, "blargg start %s\n", path.c_str());
+    gTest = "blargg";
+    u8 status = 0x00;
+    char text[80] = {};
+    bool passed = false;
+    bool failed = false;
+    int frame = 0;
+    for (; frame < 30000 && !passed && !failed; ++frame) {
+        alarm(8);
+        core->runFrame();
+        if ((frame % 30) != 0) continue;
+        u8 buf[72] = {};
+        core->achievementRead(0x6000, buf, 72);
+        status = buf[0];
+        std::memcpy(text, buf + 4, 64);
+        for (char& c : text) if ((unsigned char)c < 0x20 || (unsigned char)c > 0x7e) c = ' ';
+        // Subtests also say "Passed" while status is still $80. Only a finished
+        // suite writes a code below $80.
+        if (status == 0x00 && (std::strstr(text, "Passed") || std::strstr(text, "passed"))) passed = true;
+        if (std::strstr(text, "Failed") || (status > 0 && status < 0x80)) failed = true;
+        if (passed || failed || (frame % 300) == 0)
+            std::fprintf(stderr, "blargg frame %d status %02X %s\n", frame, status, text);
+    }
+    std::fprintf(stderr, "blargg %s status %02X %s\n", path.c_str(), status, text);
+    CHECK(passed);
+    CHECK(!failed);
+}
+
+// Words are low byte then high byte, the same order the cart bus uses.
+static void dspWrite(uint16_t word) {
+    dsp1Write((uint8_t)(word & 0xff));
+    dsp1Write((uint8_t)(word >> 8));
+}
+static uint16_t dspRead() {
+    uint16_t lo = dsp1Read();
+    return (uint16_t)(lo | (dsp1Read() << 8));
+}
+// The opcode is one byte. Arguments and results are 16-bit little-endian words.
+static void dspCmd(uint8_t op, std::initializer_list<uint16_t> args) {
+    dsp1Write(op);
+    for (uint16_t a : args) dspWrite(a);
+}
+
+// Fixed-point vectors from the published DSP-1 command specification.
+// Sine nodes are trunc(sin(i*pi/128)*32768). 0x2000 is 45 degrees, 0x4000 is 90.
+// Parameter/raster numbers are the integer result of that projection for one camera:
+// base (0, 0, 0x100), screen distance 0x100, azimuth 0, zenith 0x2000.
+static void checkDsp1() {
+    Test t("dsp1-vectors");
+    dsp1Reset();
+
+    dspCmd(0x00, {0x4000, 0x4000});
+    CHECK(dspRead() == 0x2000);
+    dspCmd(0x00, {0x7fff, 0x7fff});
+    CHECK(dspRead() == 0x7ffe);
+    dspCmd(0x00, {0x4000, 0xc000});
+    CHECK(dspRead() == 0xe000);
+    dspCmd(0x20, {0x4000, 0x4000});
+    CHECK(dspRead() == 0x2001);
+
+    dspCmd(0x04, {0x0000, 0x7fff});
+    CHECK(dspRead() == 0x0000);
+    // cos(0) is 0x7fff; times the radius, truncated, is one count under.
+    CHECK(dspRead() == 0x7ffe);
+    dspCmd(0x04, {0x2000, 0x7fff});
+    CHECK(dspRead() == 0x5a81);
+    CHECK(dspRead() == 0x5a81);
+    dspCmd(0x04, {0x4000, 0x4000});
+    // sin(90 degrees) is 0x7fff, so 0x7fff * 0x4000 >> 15 is 0x3fff.
+    CHECK(dspRead() == 0x3fff);
+    CHECK(dspRead() == 0x0000);
+    dspCmd(0x04, {0x0080, 0x7fff});
+    CHECK(dspRead() == 0x0190);
+    CHECK(dspRead() == 0x7ffe);
+
+    dspCmd(0x10, {0x4000, 0x0000});
+    CHECK(dspRead() == 0x7fff);
+    CHECK(dspRead() == 0x0001);
+    dspCmd(0x10, {0x0000, 0x0000});
+    CHECK(dspRead() == 0x7fff);
+    CHECK(dspRead() == 0x002f);
+    dspCmd(0x10, {0x6000, 0x0000});
+    CHECK(dspRead() == 0x5556);
+    CHECK(dspRead() == 0x0001);
+    dspCmd(0x10, {0xb000, 0x0002});
+    CHECK(dspRead() == 0x999a);
+    CHECK(dspRead() == 0xffff);
+
+    dspCmd(0x0c, {0x4000, 0x7fff, 0x0000});
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0x8002);
+
+    dspCmd(0x08, {0x0100, 0x0000, 0x0000});
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0x0002);
+    dspCmd(0x18, {0x0100, 0x0000, 0x0000, 0x0080});
+    CHECK(dspRead() == 0x0001);
+    dspCmd(0x28, {0x0003, 0x0004, 0x0000});
+    CHECK(dspRead() == 0x0004);
+
+    dspCmd(0x01, {0x7fff, 0x0000, 0x0000, 0x0000});
+    dspCmd(0x0d, {0x4000, 0x1000, 0x0800});
+    CHECK(dspRead() == 0x1ffe);
+    CHECK(dspRead() == 0x07ff);
+    CHECK(dspRead() == 0x03ff);
+
+    dspCmd(0x02, {0x0000, 0x0000, 0x0100, 0x0000, 0x0100, 0x0000, 0x2000});
+    CHECK(dspRead() == 0x0000); // Vof
+    CHECK(dspRead() == 0xff00); // Vva, the horizon raster
+    CHECK(dspRead() == 0x0000); // Cx
+    CHECK(dspRead() == 0xff02); // Cy
+    dspCmd(0x0a, {0x0000});
+    CHECK(dspRead() == 0x0169);
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0x01ff);
+    // The next read continues the stream one raster line later.
+    CHECK(dspRead() == 0x0169);
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0x01ff);
+    // A full line's last read already arms the next line, so $8000 here is
+    // only slot 0 of that line. Three more words, then $8000, end it.
+    dspWrite(0x8000);
+    dspWrite(0x0000);
+    dspWrite(0x0000);
+    dspWrite(0x8000);
+    dspCmd(0x0a, {0x0032});
+    CHECK(dspRead() == 0x012e);
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0x01ac);
+    dspWrite(0x0000);
+    dspWrite(0x0000);
+    dspWrite(0x0000);
+    dspWrite(0x8000);
+
+    dspCmd(0x0e, {0x0010, 0x0020});
+    CHECK(dspRead() == 0x0013);
+    CHECK(dspRead() == 0xff3a);
+    dspCmd(0x06, {0x0000, 0x0200, 0x0000});
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0xfd00);
+    CHECK(dspRead() == 0xfe95);
+
+    dspCmd(0x00, {0x4000, 0x4000});
+    CHECK(dspRead() == 0x2000);
+    dspCmd(0x2f, {0x0000});
+    CHECK(dspRead() == 0x0100);
+
+    // 0x40-0xFF are no-ops while waiting, including 0x80 (boot resync), 0x42, 0x61 and 0xB0.
+    // They do not alias via & 0x3F. 0x00-0x3F are the real opcodes.
+    dsp1Reset();
+    CHECK(dsp1Status() == 0x84);
+    for (int b = 0x40; b <= 0xFF; ++b) {
+        dsp1Write((uint8_t)b);
+        CHECK(dsp1Status() == 0x84);
+    }
+    dspCmd(0x00, {0x4000, 0x4000});
+    CHECK(dspRead() == 0x2000);
+    CHECK(dsp1Read() == 0x80);
+
+    // Byte stream matched to the reference model: 0x80 resync, parameter,
+    // a multiply whose first byte is the opcode and whose next byte is the
+    // low half of the first operand, then raster. $8000 ends the line only
+    // when it completes that line; an earlier $8000 just consumes one slot.
+    dsp1Reset();
+    for (int i = 0; i < 8; ++i) dsp1Write(0x80);
+    dsp1Write(0x40); dsp1Write(0xC0); dsp1Write(0xFF); dsp1Write(0x7F);
+    dsp1Write(0x02);
+    dspWrite(0x0000); dspWrite(0x0000); dspWrite(0x0100);
+    dspWrite(0x0000); dspWrite(0x0100); dspWrite(0x0000); dspWrite(0x2000);
+    const uint8_t paramOut[] = {0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x02, 0xFF};
+    for (uint8_t b : paramOut) CHECK(dsp1Read() == b);
+    // Low byte 0x00 is multiply. The following 0x00,0x40 is the word 0x4000.
+    dsp1Write(0x00); dsp1Write(0x00); dsp1Write(0x40); dsp1Write(0x00); dsp1Write(0x40);
+    CHECK(dsp1Read() == 0x00);
+    CHECK(dsp1Read() == 0x20);
+    dsp1Write(0x0A); dsp1Write(0x00); dsp1Write(0x00);
+    const uint8_t line3[] = {0x69, 0x01, 0x00, 0x00, 0x00, 0x00};
+    for (uint8_t b : line3) CHECK(dsp1Read() == b);
+    dsp1Write(0x00); dsp1Write(0x80);
+    CHECK(dsp1Status() == 0x84);
+    dsp1Write(0x00); dsp1Write(0x00); dsp1Write(0x40); dsp1Write(0x00); dsp1Write(0x40);
+    CHECK(dsp1Read() == 0x00);
+    CHECK(dsp1Read() == 0x20);
+
+    // $8000 after a single raster word consumes that slot and the stream continues.
+    dsp1Reset();
+    dsp1Write(0x80);
+    dsp1Write(0x02);
+    dspWrite(0x0000); dspWrite(0x0000); dspWrite(0x0100);
+    dspWrite(0x0000); dspWrite(0x0100); dspWrite(0x0000); dspWrite(0x2000);
+    for (int i = 0; i < 8; ++i) dsp1Read();
+    dsp1Write(0x0A); dspWrite(0x0000);
+    CHECK(dspRead() == 0x0169);
+    dspWrite(0x8000);
+    const uint8_t streamB[] = {0x00, 0x00, 0xFF, 0x01, 0x69, 0x01, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x01};
+    for (uint8_t b : streamB) CHECK(dsp1Read() == b);
+
+    // A 16-bit store 0x8002: low byte 0x02 starts parameter, high byte 0x80 is data.
+    dsp1Reset();
+    dsp1Write(0x02); dsp1Write(0x80); dsp1Write(0x00);
+    dspWrite(0x0000); dspWrite(0x0000); dspWrite(0x0000); dspWrite(0x0000); dspWrite(0x0000); dspWrite(0x0000);
+    const uint8_t streamE[] = {0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00};
+    for (uint8_t b : streamE) CHECK(dsp1Read() == b);
+}
+
+// Commands captured from a real race, in order, with projection state kept.
+// The expected words are the published DSP-1 fixed-point results for these inputs.
+static void checkDsp1Race() {
+    Test t("dsp1-race");
+    dsp1Reset();
+    dspCmd(0x02, {0x0800, 0x0F60, 0x0000, 0x2200, 0x0200, 0x0000, 0x2A00});
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0xFECD);
+    CHECK(dspRead() == 0x0800);
+    CHECK(dspRead() == 0x0F63);
+    const uint16_t pts[][3] = {
+        {0x0EE0, 0x0BD0, 0}, {0x0A03, 0x041A, 0}, {0x0998, 0x03E7, 0}, {0x094C, 0x03C2, 0},
+        {0x087E, 0x035F, 0}, {0x0734, 0x02C0, 0}, {0x0605, 0x024E, 0}, {0x0432, 0x01BB, 0},
+    };
+    const uint16_t proj[][3] = {
+        {0x005E, 0xFFE6, 0x000D}, {0x0017, 0xFFBB, 0x000B}, {0x0012, 0xFFBB, 0x000B}, {0x000F, 0xFFBA, 0x000B},
+        {0x0005, 0xFFB8, 0x000B}, {0xFFF6, 0xFFB5, 0x000B}, {0xFFE9, 0xFFB3, 0x000B}, {0xFFD5, 0xFFB1, 0x000B},
+    };
+    for (int i = 0; i < 8; ++i) {
+        dspCmd(0x06, {pts[i][0], pts[i][1], pts[i][2]});
+        CHECK(dspRead() == proj[i][0]);
+        CHECK(dspRead() == proj[i][1]);
+        CHECK(dspRead() == proj[i][2]);
+    }
+    dspCmd(0x02, {0x0EE0, 0x0BD0, 0x0000, 0x0100, 0x0100, 0x00C0, 0x3400});
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0xFFB2);
+    CHECK(dspRead() == 0x0EDF);
+    CHECK(dspRead() == 0x0BD2);
+    dspCmd(0x06, {0x0A03, 0x041A, 0x0000});
+    CHECK(dspRead() == 0xFF65);
+    CHECK(dspRead() == 0xFFBB);
+    CHECK(dspRead() == 0x001E);
+    const uint16_t tri[][4] = {
+        {0xCA00, 0x02B9, 0xFD5B, 0x00A9}, {0xCF00, 0x02A4, 0xFD89, 0x00F3},
+        {0xD300, 0x032C, 0xFD2A, 0x016D}, {0xD100, 0x034F, 0xFCF9, 0x0157},
+        {0xD400, 0x0271, 0xFDD8, 0x0126}, {0xD200, 0x0258, 0xFDE1, 0x0100},
+        {0xD000, 0x024D, 0xFDDF, 0x00E1}, {0x0000, 0x0000, 0x0000, 0x0000},
+    };
+    for (const auto& sample : tri) {
+        dspCmd(0x04, {sample[0], sample[1]});
+        CHECK(dspRead() == sample[2]);
+        CHECK(dspRead() == sample[3]);
+    }
+    dspCmd(0x28, {0x0000, 0x0075, 0x0025});
+    CHECK(dspRead() == 0x007A);
+
+    // Raster keeps streaming. These are the first eight lines at Vva+2 of the second camera.
+    dsp1Reset();
+    dspCmd(0x02, {0x0EE0, 0x0BD0, 0x0000, 0x0100, 0x0100, 0x00C0, 0x3400});
+    dspRead(); dspRead(); dspRead(); dspRead();
+    dspCmd(0x0a, {0xFFB4});
+    const uint16_t rows[][4] = {
+        {0x49FE, 0xFDA6, 0x015C, 0x7FFE}, {0x24FE, 0xFDA8, 0x00AD, 0x7F71},
+        {0x18A9, 0xFE70, 0x0073, 0x54F7}, {0x127E, 0xFED4, 0x0056, 0x3FB8},
+        {0x0ECB, 0xFF10, 0x0045, 0x32F9}, {0x0C54, 0xFF38, 0x0039, 0x2A7B},
+        {0x0A91, 0xFF54, 0x0031, 0x2468}, {0x0A91, 0xFF54, 0x0031, 0x2468},
+    };
+    for (auto& row : rows) {
+        CHECK(dspRead() == row[0]);
+        CHECK(dspRead() == row[1]);
+        CHECK(dspRead() == row[2]);
+        CHECK(dspRead() == row[3]);
+    }
+}
+
+// Raster at the large Vs seen in vblank, after each race Parameter. The stream
+// continues by reading; a status read between bytes must not reset it.
+static void checkDsp1RasterOracle() {
+    Test t("dsp1-raster-oracle");
+    const uint16_t camRows[][4] = {
+        {0x00A3, 0x0000, 0x0000, 0x013F}, {0x00A3, 0x0000, 0x0000, 0x013F},
+        {0x00A3, 0x0000, 0x0000, 0x013F}, {0x00A3, 0x0000, 0x0000, 0x013F},
+        {0x00A3, 0x0000, 0x0000, 0x013F}, {0x00A3, 0x0000, 0x0000, 0x013F},
+        {0x00A3, 0x0000, 0x0000, 0x013F}, {0x00A3, 0x0000, 0x0000, 0x013E},
+    };
+    const uint16_t mapRows[][4] = {
+        {0x0001, 0xFFFF, 0x0000, 0x0007}, {0x0001, 0xFFFF, 0x0000, 0x0007},
+        {0x0001, 0xFFFF, 0x0000, 0x0007}, {0x0001, 0xFFFF, 0x0000, 0x0007},
+    };
+    dsp1Reset();
+    dspCmd(0x02, {0x0800, 0x0F60, 0x0000, 0x2200, 0x0200, 0x0000, 0x2A00});
+    dspRead(); dspRead(); dspRead(); dspRead();
+    dspCmd(0x0a, {0x1E7C});
+    for (const auto& row : camRows) {
+        CHECK(dsp1Status() == 0x80 || dsp1Status() == 0x90);
+        CHECK(dspRead() == row[0]);
+        CHECK(dspRead() == row[1]);
+        CHECK(dspRead() == row[2]);
+        CHECK(dspRead() == row[3]);
+    }
+    dsp1Reset();
+    dspCmd(0x02, {0x0EE0, 0x0BD0, 0x0000, 0x0100, 0x0100, 0x00C0, 0x3400});
+    dspRead(); dspRead(); dspRead(); dspRead();
+    dspCmd(0x0a, {0x1E7C});
+    for (const auto& row : mapRows) {
+        CHECK(dspRead() == row[0]);
+        CHECK(dspRead() == row[1]);
+        CHECK(dspRead() == row[2]);
+        CHECK(dspRead() == row[3]);
+    }
+}
+
+// Bit-exact results from the DSP-1 reference model: random and edge inputs for
+// every opcode family, including the square-root curve used by distance.
+static void checkDsp1Oracle() {
+    Test t("dsp1-oracle");
+    dsp1Reset();
+    auto expect = [](uint8_t op, std::initializer_list<uint16_t> in, std::initializer_list<uint16_t> out) {
+        dspCmd(op, in);
+        for (uint16_t w : out) CHECK(dspRead() == w);
+    };
+    expect(0x00, {0x4000, 0x4000}, {0x2000});
+    expect(0x20, {0x4000, 0x4000}, {0x2001});
+    expect(0x00, {0x7fff, 0x7fff}, {0x7ffe});
+    expect(0x20, {0x7fff, 0x7fff}, {0x7fff});
+    expect(0x00, {0x8000, 0x0001}, {0xffff});
+    expect(0x10, {0x4000, 0x0001}, {0x7fff, 0x0000});
+    expect(0x30, {0x4000, 0x0001}, {0x7fff, 0x0000});
+    expect(0x04, {0x2000, 0x4000}, {0x2d41, 0x2d41});
+    expect(0x24, {0x2000, 0x4000}, {0x2d41, 0x2d41});
+    expect(0x08, {0x0003, 0x0004, 0x0000}, {0x0032, 0x0000});
+    expect(0x08, {0x7fff, 0x7fff, 0x7fff}, {0x0006, 0x7ffa});
+    expect(0x18, {0x0100, 0x0200, 0x0300, 0x0040}, {0x001b});
+    expect(0x38, {0x0100, 0x0200, 0x0300, 0x0040}, {0x001c});
+    expect(0x28, {0x0000, 0x0075, 0x0025}, {0x007a});
+    expect(0x28, {0x0003, 0x0004, 0x0000}, {0x0004});
+    expect(0x28, {0x8000, 0x8000, 0x8000}, {0x5d17});
+    expect(0x28, {0x4000, 0x0100, 0x1234}, {0x4288});
+    expect(0x0c, {0x1000, 0x3000, 0x0400}, {0x2ddf, 0xf154});
+    expect(0x2c, {0x1000, 0x3000, 0x0400}, {0x2ddf, 0xf154});
+    expect(0x1c, {0x1000, 0x0800, 0x0400, 0x2000, 0x1000, 0x0800}, {0x2170, 0x03f9, 0x0e7b});
+    expect(0x3c, {0x1000, 0x0800, 0x0400, 0x2000, 0x1000, 0x0800}, {0x2170, 0x03f9, 0x0e7b});
+    expect(0x14, {0x0100, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200}, {0x0949, 0x26c1, 0x0914});
+    expect(0x34, {0x0100, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200}, {0x0949, 0x26c1, 0x0914});
+    expect(0x07, {0x0001}, {0x0000});
+    expect(0x0f, {0x0001}, {0x0000});
+    expect(0x27, {0x0001}, {0x0100});
+    expect(0x2f, {0x0001}, {0x0100});
+    dsp1Reset();
+    dspCmd(0x01, {0x4000, 0x1000, 0x0800, 0x0400});
+    dspCmd(0x0d, {0x1000, 0x2000, 0x3000});
+    CHECK(dspRead() == 0x02f5);
+    CHECK(dspRead() == 0x07bc);
+    CHECK(dspRead() == 0x0c75);
+    dspCmd(0x03, {0x1000, 0x2000, 0x3000});
+    CHECK(dspRead() == 0x051a);
+    CHECK(dspRead() == 0x07c4);
+    CHECK(dspRead() == 0x0bb8);
+    dspCmd(0x0b, {0x1000, 0x2000, 0x3000});
+    CHECK(dspRead() == 0x02f6);
+    dsp1Reset();
+    dspCmd(0x02, {0x0800, 0x0F60, 0x0000, 0x2200, 0x0200, 0x0000, 0x2A00});
+    CHECK(dspRead() == 0x0000);
+    CHECK(dspRead() == 0xFECD);
+    CHECK(dspRead() == 0x0800);
+    CHECK(dspRead() == 0x0F63);
+    // 0x17 and 0x1F stream 1024 words. The program ROM is not in the HLE, so the
+    // words are 0, and the next byte is a new opcode.
+    for (uint8_t dumpOp : {uint8_t{0x17}, uint8_t{0x1f}}) {
+        dsp1Reset();
+        dspCmd(dumpOp, {0x0000});
+        for (int i = 0; i < 1024; ++i) CHECK(dspRead() == 0x0000);
+        CHECK((dsp1Status() & 0x04) != 0);
+        dspCmd(0x00, {0x4000, 0x4000});
+        CHECK(dspRead() == 0x2000);
+    }
+    dsp1Reset();
+    dsp1Write(0x1a);
+    CHECK(dsp1Status() == 0x04);
+    CHECK(dsp1Read() == 0x00);
+    dsp1Reset();
+    dspCmd(0x00, {0x4000, 0x4000});
+    CHECK(dspRead() == 0x2000);
+}
+
+int main(int argc, char** argv) {
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
+    std::setvbuf(stderr, nullptr, _IONBF, 0);
+    std::signal(SIGALRM, onAlarm);
+    checkDsp1();
+    checkDsp1Oracle();
+    checkDsp1Race();
+    checkDsp1RasterOracle();
+    CHECK(isNESImage((const u8*)"NES\x1A", 4) == false);
+    auto bad = std::vector<u8>(4, 0);
+    CHECK(!isNESImage(bad.data(), bad.size()));
+
+    std::string err;
+    {
+        Test t("nes-solid");
+        auto rom = nesSolid();
+        CHECK(isNESImage(rom.data(), rom.size()));
+        auto core = createCore(CoreKind::NES);
+        CHECK(core->system() == 4);
+        CHECK(core->screenWidth() == 256 && core->screenHeight() == 240);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 6);
+        CHECK(nonBlack(core->framebuffer(0), 256, 240) > 200);
+        auto state = core->saveState();
+        CHECK(state.size() > 32);
+        CHECK(core->loadState(state));
+        runFrames(*core, 1);
+        CHECK(nonBlack(core->framebuffer(0), 256, 240) > 200);
+    }
+    {
+        Test t("nes-pulse");
+        auto rom = nesPulse();
+        auto core = createCore(CoreKind::NES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 8);
+        s16 buf[8192];
+        size_t n = 0;
+        for (int i = 0; i < 8; ++i) n += core->readAudio(buf, 1024);
+        int peak = 0;
+        // readAudio already consumed them; run more and measure one buffer.
+        runFrames(*core, 1);
+        n = core->readAudio(buf, 2048);
+        for (size_t i = 0; i < n * 2; ++i) peak = std::max(peak, std::abs((int)buf[i]));
+        CHECK(n > 100);
+        CHECK(peak > 100);
+    }
+    {
+        Test t("nes-mmc3");
+        auto rom = mmc3Alive();
+        auto core = createCore(CoreKind::NES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 4);
+        CHECK(core->stuckFrames() == 0);
+    }
+    {
+        Test t("nes-mmc5");
+        auto rom = nesMapper(5, 2, false, 0, 0, 0, 0);
+        auto core = createCore(CoreKind::NES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        CHECK(core->romInfo().gameCode == "M005");
+        runFrames(*core, 4);
+        CHECK(core->stuckFrames() == 0);
+    }
+    {
+        Test t("nes-vrc6");
+        auto rom = nesMapper(24, 1, false, 0, 0, 0, 0);
+        auto core = createCore(CoreKind::NES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        CHECK(core->romInfo().gameCode == "M024");
+    }
+    {
+        Test t("nes-gxrom");
+        auto rom = nesMapper(66, 1, false, 0, 0, 0, 0);
+        auto core = createCore(CoreKind::NES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        CHECK(core->romInfo().gameCode == "M066");
+    }
+    {
+        Test t("nes-unknown");
+        auto rom = nesMapper(99, 1, false, 0, 0, 0, 0);
+        auto core = createCore(CoreKind::NES);
+        CHECK(!core->loadROM(rom.data(), rom.size(), err));
+        CHECK(err.find("mapper 99") != std::string::npos);
+    }
+    {
+        Test t("snes-red");
+        auto rom = snesRed();
+        CHECK(isSNESImage(rom.data(), rom.size()));
+        std::vector<u8> junk(0x8000, 0);
+        CHECK(!isSNESImage(junk.data(), junk.size()));
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->system() == 5);
+        CHECK(core->screenWidth() == 256 && core->screenHeight() == 224);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 8);
+        CHECK(nonBlack(core->framebuffer(0), 256, 224) > 100);
+    }
+    {
+        Test t("snes-yoshi");
+        // Yoshi's Island shape: Super FX + battery, 32 KB at $FFBD.
+        auto rom = snesFxProbe(0x15, 5);
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 8);
+        CHECK(greenPixels(core->framebuffer(0), 256, 224) > 100);
+        CHECK(core->saveDataDirty());
+        CHECK(core->saveData().size() == 32 * 1024);
+    }
+    {
+        Test t("snes-starfox");
+        // Star Fox shape: Super FX + RAM, no battery, $FFBD = $FF → 32 KB on SHVC-1C0N.
+        auto rom = snesFxProbe(0x13, 0xFF);
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 8);
+        CHECK(greenPixels(core->framebuffer(0), 256, 224) > 100);
+        CHECK(!core->saveDataDirty());
+    }
+    {
+        Test t("snes-fx-32k");
+        auto rom = snesFxProbe(0x13, 0);
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 4);
+        CHECK(greenPixels(core->framebuffer(0), 256, 224) > 100);
+        CHECK(!core->saveDataDirty());
+    }
+    {
+        Test t("snes-fx-go-no-ron");
+        auto rom = snesFxGoWithoutRon();
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 2);
+        CHECK(greenPixels(core->framebuffer(0), 256, 224) > 100);
+    }
+    {
+        Test t("snes-punchout");
+        // Super Punch-Out shape: ROM+RAM+battery, no coprocessor. Must stay a plain board.
+        auto rom = snesPlainProbe(0x02, 3);
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 8);
+        CHECK(greenPixels(core->framebuffer(0), 256, 224) > 100);
+        CHECK(core->saveDataDirty());
+        CHECK(core->saveData().size() == 8 * 1024);
+    }
+    {
+        Test t("snes-bad-chip");
+        auto rom = snesPlainProbe(0xE3, 0);
+        auto core = createCore(CoreKind::SNES);
+        CHECK(!core->loadROM(rom.data(), rom.size(), err));
+        CHECK(err.find("unsupported cartridge chip") != std::string::npos);
+    }
+    {
+        Test t("snes-hirom");
+        auto rom = snesHiWins();
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        CHECK(core->romInfo().gameCode == "HiROM");
+    }
+    {
+        Test t("snes-mariokart");
+        auto rom = snesMarioKartShape();
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        CHECK(core->romInfo().gameCode == "HiROM");
+        CHECK(core->romInfo().title == "SHVC-1K1X-10");
+        runFrames(*core, 4);
+        u32 pc = 0;
+        u8 wram[2] = {};
+        superFamicomCpuDebug(&pc, wram, 0, 2);
+        std::printf("snes mariokart pc=%06X sr=%02X sram=%02X\n", pc, wram[0], wram[1]);
+        CHECK((pc & 0xFF0000) == 0);
+        CHECK((pc & 0xFFFF) >= 0xFF70);
+        CHECK((wram[0] & 0x80) != 0);
+        CHECK(wram[1] == 0x5A);
+    }
+    {
+        Test t("snes-lorom");
+        auto rom = snesLoHolds();
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        CHECK(core->romInfo().gameCode == "LoROM");
+    }
+    {
+        Test t("snes-dsp-dma");
+        // HiROM DSP (1K1X). The CPU writes Parameter and Raster to $00:6000, then a
+        // fixed DMA reads the streamed raster bytes from that same data port into WRAM.
+        std::vector<u8> rom(0x10000, 0);
+        rom[0x7FD5] = 0x00;
+        rom[0x7FD6] = 0xF4;
+        std::memset(rom.data() + 0xFFC0, ' ', 21);
+        std::memcpy(rom.data() + 0xFFC0, "DSP DMA RASTER", 14);
+        rom[0xFFD5] = 0x31;
+        rom[0xFFD6] = 0x05;
+        rom[0xFFD7] = 0x06;
+        rom[0xFFD8] = 0x00;
+        rom[0xFFDC] = 0x00; rom[0xFFDD] = 0x00;
+        rom[0xFFDE] = 0xFF; rom[0xFFDF] = 0xFF;
+        rom[0xFFFC] = 0x00; rom[0xFFFD] = 0x80;
+        const u8 payload[] = {
+            0x02,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x20,
+            0x0A, 0x00, 0x00,
+        };
+        std::vector<u8> prog;
+        auto sta = [&](u8 v) {
+            prog.insert(prog.end(), {0xA9, v, 0x8F, 0x00, 0x60, 0x00});
+        };
+        prog.insert(prog.end(), {0x78, 0x18, 0xFB, 0xE2, 0x30});
+        for (int i = 0; i < 15; ++i) sta(payload[i]); // opcode $02 and its seven words
+        for (int i = 0; i < 8; ++i) prog.insert(prog.end(), {0xAF, 0x00, 0x60, 0x00}); // read Vof,Vva,Cx,Cy
+        for (int i = 15; i < 18; ++i) sta(payload[i]); // opcode $0A and Vs = 0
+        prog.insert(prog.end(), {
+            0xA9, 0x00, 0x8D, 0x81, 0x21,
+            0xA9, 0x10, 0x8D, 0x82, 0x21,
+            0xA9, 0x7E, 0x8D, 0x83, 0x21,
+            0xA9, 0x08, 0x8D, 0x00, 0x43,
+            0xA9, 0x80, 0x8D, 0x01, 0x43,
+            0xA9, 0x00, 0x8D, 0x02, 0x43,
+            0xA9, 0x60, 0x8D, 0x03, 0x43,
+            0xA9, 0x00, 0x8D, 0x04, 0x43,
+            0xA9, 0x08, 0x8D, 0x05, 0x43,
+            0xA9, 0x00, 0x8D, 0x06, 0x43,
+            0xA9, 0x01, 0x8D, 0x0B, 0x42,
+            0xA9, 0xA5, 0x8F, 0x00, 0x20, 0x7E,
+            0x80, 0xFE,
+        });
+        std::memcpy(rom.data() + 0x8000, prog.data(), prog.size());
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        CHECK(core->romInfo().title == "SHVC-1K1X-10");
+        runFrames(*core, 4);
+        u8 wram[9] = {};
+        superFamicomCpuDebug(nullptr, wram, 0x1000, 8);
+        superFamicomCpuDebug(nullptr, wram + 8, 0x2000, 1);
+        std::printf("snes dsp dma wram=%02X %02X %02X %02X %02X %02X %02X %02X mark=%02X\n",
+                    wram[0], wram[1], wram[2], wram[3], wram[4], wram[5], wram[6], wram[7], wram[8]);
+        CHECK(wram[8] == 0xA5);
+        CHECK(wram[0] == 0x69 && wram[1] == 0x01);
+        CHECK(wram[2] == 0x00 && wram[3] == 0x00);
+        CHECK(wram[4] == 0x00 && wram[5] == 0x00);
+        CHECK(wram[6] == 0xFF && wram[7] == 0x01);
+    }
+    {
+        Test t("snes-wram-watch");
+        // CPU $2180 fill, 17-bit WMADD wrap, direct $7E store, DMA into $2180
+        // and DMA back out of $2180. The watch must name each source.
+        std::vector<u8> rom(0x8000, 0);
+        const u8 prog[] = {
+            0x78, 0x18, 0xFB, 0xE2, 0x30,
+            0xA9, 0x80, 0x8D, 0x81, 0x21,
+            0xA9, 0x3C, 0x8D, 0x82, 0x21,
+            0xA9, 0x00, 0x8D, 0x83, 0x21,
+            0xA9, 0x11, 0x8D, 0x80, 0x21,
+            0xA9, 0x22, 0x8D, 0x80, 0x21,
+            0xA9, 0xFF, 0x8D, 0x81, 0x21,
+            0xA9, 0xFF, 0x8D, 0x82, 0x21,
+            0xA9, 0x01, 0x8D, 0x83, 0x21,
+            0xA9, 0xAB, 0x8D, 0x80, 0x21,
+            0xA9, 0xCD, 0x8D, 0x80, 0x21,
+            0xA9, 0x77, 0x8F, 0x20, 0x3F, 0x7E,
+            0xA9, 0x00, 0x8D, 0x81, 0x21,
+            0xA9, 0x3D, 0x8D, 0x82, 0x21,
+            0xA9, 0x00, 0x8D, 0x83, 0x21,
+            0xA9, 0x00, 0x8D, 0x00, 0x43,
+            0xA9, 0x80, 0x8D, 0x01, 0x43,
+            0xA9, 0x80, 0x8D, 0x02, 0x43,
+            0xA9, 0x81, 0x8D, 0x03, 0x43,
+            0xA9, 0x00, 0x8D, 0x04, 0x43,
+            0xA9, 0x04, 0x8D, 0x05, 0x43,
+            0xA9, 0x00, 0x8D, 0x06, 0x43,
+            0xA9, 0x01, 0x8D, 0x0B, 0x42,
+            0xA9, 0x80, 0x8D, 0x81, 0x21,
+            0xA9, 0x3C, 0x8D, 0x82, 0x21,
+            0xA9, 0x00, 0x8D, 0x83, 0x21,
+            // B->A into ROM, not WRAM: WRAM-to-WMDATA DMA is invalid on the console.
+            0xA9, 0x80, 0x8D, 0x00, 0x43,
+            0xA9, 0x80, 0x8D, 0x01, 0x43,
+            0xA9, 0x00, 0x8D, 0x02, 0x43,
+            0xA9, 0x82, 0x8D, 0x03, 0x43,
+            0xA9, 0x00, 0x8D, 0x04, 0x43,
+            0xA9, 0x01, 0x8D, 0x05, 0x43,
+            0xA9, 0x00, 0x8D, 0x06, 0x43,
+            0xA9, 0x01, 0x8D, 0x0B, 0x42,
+            // The $2180 read must have incremented WMADD, so this lands on $7E3C81.
+            0xA9, 0x99, 0x8D, 0x80, 0x21,
+            0x80, 0xFE,
+        };
+        std::memcpy(rom.data(), prog, sizeof prog);
+        rom[0x180] = 0xDE; rom[0x181] = 0xAD; rom[0x182] = 0xBE; rom[0x183] = 0xEF;
+        stampSnes(rom, 0x00, 0, 0);
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        superFamicomWatchOpenFrame(0, 0);
+        runFrames(*core, 4);
+        std::string log = superFamicomWatchCloseFrame();
+        u8 got[8] = {};
+        superFamicomCpuDebug(nullptr, got, 0x3C80, 2);
+        superFamicomCpuDebug(nullptr, got + 2, 0x3D00, 4);
+        superFamicomCpuDebug(nullptr, got + 6, 0x3F20, 1);
+        u8 wrap[2] = {};
+        superFamicomCpuDebug(nullptr, wrap, 0x1FFFF, 1);
+        superFamicomCpuDebug(nullptr, wrap + 1, 0x0000, 1);
+        std::printf("snes wram watch %02X %02X dma %02X %02X %02X %02X direct %02X wrap %02X %02X\n",
+                    got[0], got[1], got[2], got[3], got[4], got[5], got[6], wrap[0], wrap[1]);
+        CHECK(got[0] == 0x11 && got[1] == 0x99);
+        CHECK(got[2] == 0xDE && got[3] == 0xAD && got[4] == 0xBE && got[5] == 0xEF);
+        CHECK(got[6] == 0x77);
+        CHECK(wrap[0] == 0xAB && wrap[1] == 0xCD);
+        CHECK(log.find("wram vc=") != std::string::npos && log.find("cpu pc=") != std::string::npos);
+        CHECK(log.find("$7E3C80=11") != std::string::npos);
+        CHECK(log.find("$7E3C81=22") != std::string::npos);
+        CHECK(log.find("$7E3C81=99") != std::string::npos);
+        CHECK(log.find("$7E3F20=77") != std::string::npos);
+        CHECK(log.find("dma ch=0 $7E3D00=DE") != std::string::npos);
+        CHECK(log.find("dir=AtoB") != std::string::npos && log.find("bbus=80") != std::string::npos);
+        CHECK(log.find("abus=008180") != std::string::npos);
+        CHECK(log.find("dir=BtoA") != std::string::npos && log.find("abus=008200") != std::string::npos);
+        CHECK(log.find("$2183=01") != std::string::npos && log.find("wmadd=1FFFF") != std::string::npos);
+        CHECK(log.find("wram=8") != std::string::npos);
+        if (failures) std::printf("%s\n", log.c_str());
+    }
+    {
+        Test t("snes-dsp-mul");
+        auto rom = snesDspMultiply();
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 8);
+        CHECK(greenPixels(core->framebuffer(0), 256, 224) > 100);
+    }
+    {
+        Test t("snes-trace");
+        auto rom = snesDspMultiply();
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        superFamicomTraceBegin();
+        runFrames(*core, 2);
+        std::string trace = superFamicomTraceEnd();
+        CHECK(trace.find("picture=0 vcounter=") != std::string::npos);
+        CHECK(trace.find("picture=223 vcounter=") != std::string::npos);
+        CHECK(trace.find("BGMODE=") != std::string::npos);
+        CHECK(trace.find("cmd=00") != std::string::npos);
+        CHECK(trace.find("dsp bus") != std::string::npos);
+        CHECK(trace.find("addr=") != std::string::npos);
+        CHECK(trace.find("$21") != std::string::npos);
+        core.reset();
+        std::vector<u8> hdma(0x8000, 0);
+        const u8 prog[] = {
+            0x78, 0x18, 0xFB, 0xE2, 0x30,
+            0xA9, 0x80, 0x8D, 0x00, 0x21,
+            0xA9, 0x00, 0x8D, 0x00, 0x43,
+            0xA9, 0x00, 0x8D, 0x01, 0x43,
+            0xA9, 0x00, 0x8D, 0x02, 0x43,
+            0xA9, 0x81, 0x8D, 0x03, 0x43,
+            0xA9, 0x00, 0x8D, 0x04, 0x43,
+            0xA9, 0x01, 0x8D, 0x0C, 0x42,
+            0xA9, 0x0F, 0x8D, 0x00, 0x21,
+            0x80, 0xFE,
+        };
+        std::memcpy(hdma.data(), prog, sizeof prog);
+        hdma[0x100] = 0x01;
+        hdma[0x101] = 0x0F;
+        hdma[0x102] = 0x00;
+        stampSnes(hdma, 0, 0, 0);
+        auto core2 = createCore(CoreKind::SNES);
+        CHECK(core2->loadROM(hdma.data(), hdma.size(), err));
+        superFamicomTraceBegin();
+        runFrames(*core2, 2);
+        std::string hlog = superFamicomTraceEnd();
+        CHECK(hlog.find("ch=0 enable=1 mode=0 indirect=0 bbus=00 table=008100") != std::string::npos);
+        CHECK(hlog.find("2100=0F") != std::string::npos);
+    }
+    {
+        Test t("snes-ipl");
+        auto rom = snesIpl();
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 60);
+        const u32* fb = core->framebuffer(0);
+        u32 center = fb[112 * 256 + 128];
+        u16 apuPc = 0;
+        u8 ports[4] = {};
+        u8 ram[8] = {};
+        superFamicomApuDebug(&apuPc, ports, ram, 0x0200, 8);
+        int green = greenPixels(fb, 256, 224);
+        std::printf("snes upload pc=%04X ports=%02X %02X %02X %02X ram=%02X %02X %02X %02X %02X %02X %02X %02X center=%08X green=%d\n",
+                    apuPc, ports[0], ports[1], ports[2], ports[3],
+                    ram[0], ram[1], ram[2], ram[3], ram[4], ram[5], ram[6], ram[7], center, green);
+        CHECK(green > 100);
+        CHECK(ram[0] == 0xE8 && ram[1] == 0x42 && ram[2] == 0xC4 && ram[3] == 0xF4 && ram[4] == 0x2F && ram[5] == 0xFE);
+        CHECK(apuPc >= 0x0200 && apuPc < 0x0210);
+    }
+    {
+        Test t("snes-ipl-blocks");
+        auto rom = snesIplReentry();
+        auto core = createCore(CoreKind::SNES);
+        CHECK(core->loadROM(rom.data(), rom.size(), err));
+        runFrames(*core, 180);
+        const u32* fb = core->framebuffer(0);
+        u16 apuPc = 0;
+        u8 ports[4] = {};
+        u8 regs[4] = {}, blk[4] = {}, wrap0[4] = {}, wrap1[4] = {}, second[16] = {}, prog[6] = {};
+        superFamicomApuDebug(&apuPc, ports, regs, 0x0100, 4);
+        superFamicomApuDebug(nullptr, nullptr, blk, 0x0200, 4);
+        superFamicomApuDebug(nullptr, nullptr, wrap0, 0x0300, 4);
+        superFamicomApuDebug(nullptr, nullptr, wrap1, 0x0300 + 296, 4);
+        superFamicomApuDebug(nullptr, nullptr, second, 0x0600, 16);
+        superFamicomApuDebug(nullptr, nullptr, prog, 0x0700, 6);
+        int green = greenPixels(fb, 256, 224);
+        std::printf("snes blocks pc=%04X ports=%02X %02X %02X %02X regs=%02X %02X %02X %02X green=%d\n",
+                    apuPc, ports[0], ports[1], ports[2], ports[3],
+                    regs[0], regs[1], regs[2], regs[3], green);
+        CHECK(green > 100);
+        CHECK(ports[0] == 0x77);
+        CHECK(regs[0] == 0 && regs[1] == 0 && regs[2] == 0);
+        CHECK((regs[3] & 0x83) == 0x02);  // Z set, N and C clear
+        CHECK(blk[0] == 0x11 && blk[1] == 0x22 && blk[2] == 0x33 && blk[3] == 0x44);
+        CHECK(wrap0[0] == 0x00 && wrap0[1] == 0x07 && wrap0[2] == 0x0E && wrap0[3] == 0x15);
+        CHECK(wrap1[0] == ((296 * 7) & 0xFF) && wrap1[3] == ((299 * 7) & 0xFF));
+        bool secondOk = true;
+        for (int i = 0; i < 16; ++i) if (second[i] != i) secondOk = false;
+        CHECK(secondOk);
+        CHECK(prog[0] == 0xE8 && prog[1] == 0x77 && prog[2] == 0xC4 && prog[3] == 0xF4 && prog[4] == 0x2F && prog[5] == 0xFE);
+        CHECK(apuPc >= 0x0700 && apuPc < 0x0710);
+    }
+    {
+        Test t("snes-race-timeline");
+        alarm(300);
+        std::string romPath, dir, error;
+        RaceRunOptions parsed;
+        char s0[] = "h", s1[] = "game.sfc", s2[] = "out", s3[] = "--watch-from", s4[] = "1300";
+        char s5[] = "--pc-trace-bank", s6[] = "84", s7[] = "--dump-wram", s8[] = "1800,1801,2220,2670";
+        char s9[] = "--trace", s10[] = "2100-2230";
+        char* av[] = {s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10};
+        CHECK(parseRaceCommand(11, av, romPath, dir, parsed, error));
+        CHECK(error.empty());
+        CHECK(romPath == "game.sfc" && dir == "out");
+        CHECK(parsed.watchFrom == 1300);
+        CHECK(parsed.pcBank == 0x84);
+        CHECK(parsed.traceLo == 2100 && parsed.traceHi == 2230);
+        CHECK(parsed.dumpWram.size() == 4 && parsed.dumpWram[0] == 1800 && parsed.dumpWram[3] == 2670);
+        CHECK(parsed.last >= 2670);
+        char t0[] = "h", t1[] = "--trace", t2[] = "2669-2672", t3[] = "game.sfc", t4[] = "out";
+        char* av2[] = {t0, t1, t2, t3, t4};
+        CHECK(parseRaceCommand(5, av2, romPath, dir, parsed, error));
+        CHECK(romPath == "game.sfc" && parsed.traceLo == 2669 && parsed.traceHi == 2672 && parsed.last == 3900);
+        char w0[] = "h", w1[] = "game.sfc", w2[] = "out", w3[] = "--watch-from", w4[] = "1300";
+        char* av3[] = {w0, w1, w2, w3, w4};
+        CHECK(parseRaceCommand(5, av3, romPath, dir, parsed, error));
+        CHECK(parsed.watchFrom == 1300 && parsed.last == 2230 && parsed.traceLo < 0);
+        char d0[] = "h", d1[] = "game.sfc", d2[] = "out", d3[] = "--dsp-log", d4[] = "1600-1850";
+        char d5[] = "--dump-wram-every", d6[] = "1500-1900:5";
+        char* av4[] = {d0, d1, d2, d3, d4, d5, d6};
+        CHECK(parseRaceCommand(7, av4, romPath, dir, parsed, error));
+        CHECK(parsed.dspLogLo == 1600 && parsed.dspLogHi == 1850);
+        CHECK(parsed.dumpEveryLo == 1500 && parsed.dumpEveryHi == 1900 && parsed.dumpEveryStep == 5);
+        CHECK(parsed.last == 3900);
+        CHECK(raceButtons(360) == BtnStart);
+        CHECK(raceButtons(516) == BtnB);
+        CHECK(raceButtons(1350) == BtnB);
+        CHECK(raceButtons(1680) == BtnB);
+        CHECK(raceButtons(2220) == 0);
+        CHECK((raceButtons(2700) & (BtnB | BtnLeft)) == (BtnB | BtnLeft));
+        CHECK((raceButtons(2708) & BtnLeft) == 0);
+
+        auto rom = snesTimelineProbe();
+        RaceRunOptions plain;
+        plain.last = 2220;
+        auto coreA = createCore(CoreKind::SNES);
+        CHECK(coreA->loadROM(rom.data(), rom.size(), err));
+        auto hashPlain = runSnesRace(*coreA, plain);
+        RaceRunOptions flagged;
+        flagged.last = 2220;
+        flagged.watchFrom = 1300;
+        flagged.traceLo = 2100;
+        flagged.traceHi = 2220;
+        flagged.pcBank = 0;
+        flagged.dumpWram = {2220};
+        auto coreB = createCore(CoreKind::SNES);
+        CHECK(coreB->loadROM(rom.data(), rom.size(), err));
+        auto hashFlags = runSnesRace(*coreB, flagged);
+        RaceRunOptions quiet;
+        quiet.last = 2220;
+        quiet.timeline = false;
+        auto coreC = createCore(CoreKind::SNES);
+        CHECK(coreC->loadROM(rom.data(), rom.size(), err));
+        auto hashQuiet = runSnesRace(*coreC, quiet);
+        std::printf("timeline hash plain=%016llX flags=%016llX quiet=%016llX\n",
+                    (unsigned long long)hashPlain.hash2220,
+                    (unsigned long long)hashFlags.hash2220,
+                    (unsigned long long)hashQuiet.hash2220);
+        CHECK(hashPlain.ok && hashPlain.have2220);
+        CHECK(hashFlags.ok && hashFlags.have2220);
+        CHECK(hashQuiet.ok && hashQuiet.have2220);
+        CHECK(hashPlain.hash2220 == hashFlags.hash2220);
+        CHECK(hashPlain.hash2220 != hashQuiet.hash2220);
+    }
+    for (int i = 1; i < argc; ++i) runBlargg(argv[i]);
+    if (failures) { std::printf("%d NES/SNES check(s) failed\n", failures); return 1; }
+    std::printf("nes/snes tests passed\n");
+    return 0;
+}

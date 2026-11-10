@@ -1,0 +1,28 @@
+{
+  "note": "Original per-game settings. Identifiers only: no ROM bytes. Unknown games use the heuristics in GameProfiles.swift.",
+  "games": {
+    "ds:AMCE": {"scale": 2, "filter": "sharpBilinear", "frameskip": "off", "threeD": true, "note": "3D"},
+    "ds:AMCJ": {"scale": 2, "filter": "sharpBilinear", "frameskip": "off", "threeD": true, "note": "3D"},
+    "ds:AMCP": {"scale": 2, "filter": "sharpBilinear", "frameskip": "off", "threeD": true, "note": "3D"},
+    "ds:ASME": {"scale": 2, "filter": "sharpBilinear", "frameskip": "off", "threeD": true, "note": "3D"},
+    "ds:ASMJ": {"scale": 2, "filter": "sharpBilinear", "frameskip": "off", "threeD": true, "note": "3D"},
+    "ds:ASMP": {"scale": 2, "filter": "sharpBilinear", "frameskip": "off", "threeD": true, "note": "3D"},
+    "ds:A2DE": {"scale": 2, "filter": "sharpBilinear", "frameskip": "off", "threeD": true, "note": "3D"},
+    "ds:A2DJ": {"scale": 2, "filter": "sharpBilinear", "frameskip": "off", "threeD": true, "note": "3D"},
+    "ds:A2DP": {"scale": 2, "filter": "sharpBilinear", "frameskip": "off", "threeD": true, "note": "3D"},
+    "gba:AXVE": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false},
+    "gba:AXPE": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false},
+    "gba:BPEE": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false},
+    "gba:BPRE": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false},
+    "gba:BPGE": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false},
+    "snes:chip:03": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false, "note": "DSP-1"},
+    "snes:chip:04": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false, "note": "DSP-1"},
+    "snes:chip:05": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false, "note": "DSP-1"},
+    "snes:family:1": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false, "note": "Super FX, frameskip off"},
+    "snes:chip:F3": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false, "note": "Cx4"},
+    "nes:mapper:4": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false},
+    "nes:mapper:5": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false},
+    "nes:mapper:24": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false},
+    "nes:mapper:26": {"scale": 1, "filter": "nearest", "frameskip": "off", "threeD": false}
+  }
+}

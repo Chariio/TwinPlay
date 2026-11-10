@@ -1,0 +1,36 @@
+{
+  "identifier" : "5E3D7A10-9C1B-4D2E-8F4A-0123456789AB",
+  "nonRenewingSubscriptions" : [ ],
+  "products" : [
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : true,
+      "internalID" : "6739000001",
+      "localizations" : [
+        { "description" : "All skins, scenes, app icons and single-screen mode", "displayName" : "TwinPlay Plus", "locale" : "en_US" }
+      ],
+      "productID" : "com.charlie.dsemu.plus",
+      "referenceName" : "TwinPlay Plus",
+      "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : true,
+      "internalID" : "6739000002",
+      "localizations" : [
+        { "description" : "Everything in Plus, Cover Flow, BIOS tools, no ads", "displayName" : "TwinPlay Pro", "locale" : "en_US" }
+      ],
+      "productID" : "com.charlie.dsemu.pro",
+      "referenceName" : "TwinPlay Pro",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6739000000",
+    "_developerTeamID" : "XAC9G78B95",
+    "_locale" : "en_US",
+    "_storefront" : "USA"
+  },
+  "subscriptionGroups" : [ ],
+  "version" : { "major" : 4, "minor" : 0 }
+}

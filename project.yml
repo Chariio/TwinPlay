@@ -1,0 +1,347 @@
+# XcodeGen spec. Run ./scripts/generate-project.sh to create DSEmu.xcodeproj.
+name: DSEmu
+options:
+  bundleIdPrefix: com.charlie
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+packages:
+  # Google Mobile Ads (AdMob). Remove this block and the dependency below to build without ads;
+  # the app compiles either way (AdBanner.swift checks `canImport(GoogleMobileAds)`).
+  GoogleMobileAds:
+    url: https://github.com/googleads/swift-package-manager-google-mobile-ads.git
+    majorVersion: 13.0.0
+  # Google User Messaging Platform (GDPR/EEA/UK consent form), shown before ads.
+  GoogleUserMessagingPlatform:
+    url: https://github.com/googleads/swift-package-manager-google-user-messaging-platform.git
+    majorVersion: 3.0.0
+settings:
+  base:
+    # ---- AdMob IDs: the ONE place to change them ----
+    # App ID: Charlie's real AdMob app. Banner: Release uses TWINPLAY_ADMOB_BANNER_ID (Charlie's real unit);
+    # Debug builds ALWAYS use Google's test unit (AdBanner.swift).
+    TWINPLAY_ADMOB_APP_ID: ca-app-pub-9510020710826842~3059291997
+    TWINPLAY_ADMOB_BANNER_ID: ca-app-pub-9510020710826842/6447872661
+    # One version for the app and the widget extension. Both Info.plists read these.
+    MARKETING_VERSION: "1.4"
+    CURRENT_PROJECT_VERSION: "8"
+    SWIFT_VERSION: "5.0"
+    CLANG_CXX_LANGUAGE_STANDARD: "c++20"
+    CLANG_CXX_LIBRARY: "libc++"
+    CLANG_ENABLE_OBJC_ARC: YES
+    # rcheevos (RetroAchievements, MIT, Vendor/rcheevos): ROM hashing for game identification.
+    GCC_PREPROCESSOR_DEFINITIONS: ["$(inherited)", "RC_CLIENT_SUPPORTS_HASH=1"]
+    # #18 localization: String Catalogs (Localizable.xcstrings / InfoPlist.xcstrings), Swift string extraction.
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+targets:
+  DSEmu:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    dependencies:
+      - package: GoogleMobileAds
+      - package: GoogleUserMessagingPlatform
+      - target: TwinPlayWidget     # "TwinPlay Games" home screen widget (embedded in PlugIns)
+    sources:
+      - path: DSEmu
+      - path: Shared
+      - path: Core/src          # SnesTrace.cpp lives here so the iOS link gets snesTrace* / snesDsp*
+      - path: Core/third_party/ares/nall/nall/nall.cpp
+      - path: Core/third_party/ares/libco/libco.c
+      - path: Core/third_party/ares/ares/component/processor/mos6502/mos6502.cpp
+      - path: Core/third_party/ares/ares/component/processor/wdc65816/wdc65816.cpp
+      - path: Core/third_party/ares/ares/component/processor/spc700/spc700.cpp
+      - path: Core/third_party/ares/ares/component/processor/arm7tdmi/arm7tdmi.cpp
+      - path: Core/third_party/ares/ares/component/processor/gsu/gsu.cpp
+      - path: Core/third_party/ares/ares/component/processor/hg51b/hg51b.cpp
+      - path: Core/third_party/ares/ares/component/processor/upd96050/upd96050.cpp
+      - path: Core/third_party/ares/ares/component/audio/ym2149/ym2149.cpp
+      - path: Core/third_party/ares/ares/component/audio/ym2413/ym2413.cpp
+      - path: Core/third_party/ares/ares/component/eeprom/m24c/m24c.cpp
+      - path: Core/third_party/ares/ares/component/flash/sst39sf0x0/sst39sf0x0.cpp
+      - path: Core/third_party/ares/ares/component/arcade/dip-switches.cpp
+      - path: Core/third_party/ares/thirdparty/ymfm/src
+      - path: Core/third_party/ares/database/sfc-boards.bml
+        buildPhase: resources
+      - path: Core/include
+        buildPhase: none
+      - path: Vendor/rcheevos/src
+      - path: Vendor/rcheevos/include
+        buildPhase: none
+      - path: Vendor/rcheevos/rcheevos-LICENSE.txt
+        buildPhase: resources
+      - path: Supporting/TwinPlay.storekit
+        buildPhase: none
+      - path: Core/third_party/build/plugins
+        buildPhase: resources
+        optional: true
+        excludes:
+          - "*.dylib"
+    preBuildScripts:
+      - name: N64 and 3DS cores
+        script: |
+          "${SRCROOT}/scripts/build-n64-3ds.sh"
+        basedOnDependencyAnalysis: false
+    postCompileScripts:
+      - name: Embed N64 plugins
+        script: |
+          PLUGINS="${SRCROOT}/Core/third_party/build/plugins"
+          DEST_FW="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+          APP="${TARGET_BUILD_DIR}/${WRAPPER_NAME}"
+          mkdir -p "$DEST_FW"
+          shopt -s nullglob
+          for f in "$PLUGINS"/*.dylib; do
+            name="$(basename "$f")"
+            cp -a "$f" "$DEST_FW/$name"
+            install_name_tool -id "@rpath/$name" "$DEST_FW/$name" || true
+            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] && [ "${EXPANDED_CODE_SIGN_IDENTITY}" != "-" ]; then
+              codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --timestamp=none --preserve-metadata=identifier,entitlements,flags --generate-entitlement-der "$DEST_FW/$name" || true
+            fi
+          done
+          # Never leave N64 dylibs in PlugIns (appex-only) or unsigned copies in the app root.
+          # On case-insensitive APFS, .../plugins is the same as PlugIns and caused
+          # CODESIGNING Invalid Page when GLideN64 called back into libmupen64plus.
+          if [ -d "$APP/PlugIns" ]; then
+            find "$APP/PlugIns" -maxdepth 1 -name "*.dylib" -delete
+          fi
+          for name in libmupen64plus.dylib mupen64plus-video-GLideN64.dylib mupen64plus-rsp-hle.dylib mupen64plus-audio-twinplay.dylib mupen64plus-input-twinplay.dylib; do
+            rm -f "$APP/$name"
+          done
+          # GLideN64 looks for font.ttf / mupen64plus.ini beside the plugin.
+          for name in font.ttf mupen64plus.ini mupencheat.txt; do
+            if [ -f "$APP/$name" ]; then
+              cp -a "$APP/$name" "$DEST_FW/$name"
+            fi
+          done
+        basedOnDependencyAnalysis: false
+    info:
+      path: Supporting/Info.plist
+      properties:
+        NSPhotoLibraryAddUsageDescription: "TwinPlay saves your screenshots and gameplay videos to Photos."
+        NSUserTrackingUsageDescription: "This identifier helps TwinPlay show you more relevant ads, if you allow it. You can choose Ask App Not to Track and still use the app; ads may be less relevant. TwinPlay Pro removes ads."
+        CFBundleDisplayName: TwinPlay
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIColorName: TwinPlayLaunchBackground
+          UIImageName: TwinPlayLaunchMark
+          UIImageRespectsSafeAreaInsets: false
+        ITSAppUsesNonExemptEncryption: false
+        LSApplicationQueriesSchemes: [mailto]
+        # nduo://open?id=<game file> (widget taps) and nduo://library.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.charlie.dsemu
+            CFBundleURLSchemes: [nduo]
+        # AdMob IDs come from TWINPLAY_ADMOB_APP_ID / TWINPLAY_ADMOB_BANNER_ID (settings at the top).
+        GADApplicationIdentifier: $(TWINPLAY_ADMOB_APP_ID)
+        TwinPlayBannerUnitID: $(TWINPLAY_ADMOB_BANNER_ID)
+        SKAdNetworkItems:
+          - SKAdNetworkIdentifier: cstr6suwn9.skadnetwork
+          - SKAdNetworkIdentifier: 4fzdc2evr5.skadnetwork
+          - SKAdNetworkIdentifier: 2fnua5tdw4.skadnetwork
+          - SKAdNetworkIdentifier: ydx93a7ass.skadnetwork
+          - SKAdNetworkIdentifier: p78axxw29g.skadnetwork
+          - SKAdNetworkIdentifier: v72qych5uu.skadnetwork
+          - SKAdNetworkIdentifier: ludvb6z3bs.skadnetwork
+          - SKAdNetworkIdentifier: cp8zw746q7.skadnetwork
+          - SKAdNetworkIdentifier: 3sh42y64q3.skadnetwork
+          - SKAdNetworkIdentifier: c6k4g5qg8m.skadnetwork
+          - SKAdNetworkIdentifier: s39g8k73mm.skadnetwork
+          - SKAdNetworkIdentifier: wg4vff78zm.skadnetwork
+          - SKAdNetworkIdentifier: 3qy4746246.skadnetwork
+          - SKAdNetworkIdentifier: f38h382jlk.skadnetwork
+          - SKAdNetworkIdentifier: hs6bdukanm.skadnetwork
+          - SKAdNetworkIdentifier: mlmmfzh3r3.skadnetwork
+          - SKAdNetworkIdentifier: v4nxqhlyqp.skadnetwork
+          - SKAdNetworkIdentifier: wzmmz9fp6w.skadnetwork
+          - SKAdNetworkIdentifier: su67r6k2v3.skadnetwork
+          - SKAdNetworkIdentifier: yclnxrl5pm.skadnetwork
+          - SKAdNetworkIdentifier: t38b2kh725.skadnetwork
+          - SKAdNetworkIdentifier: 7ug5zh24hu.skadnetwork
+          - SKAdNetworkIdentifier: gta9lk7p23.skadnetwork
+          - SKAdNetworkIdentifier: vutu7akeur.skadnetwork
+          - SKAdNetworkIdentifier: y5ghdn5j9k.skadnetwork
+          - SKAdNetworkIdentifier: v9wttpbfk9.skadnetwork
+          - SKAdNetworkIdentifier: n38lu8286q.skadnetwork
+          - SKAdNetworkIdentifier: 47vhws6wlr.skadnetwork
+          - SKAdNetworkIdentifier: kbd757ywx3.skadnetwork
+          - SKAdNetworkIdentifier: 9t245vhmpl.skadnetwork
+          - SKAdNetworkIdentifier: a2p9lx4jpn.skadnetwork
+          - SKAdNetworkIdentifier: 22mmun2rn5.skadnetwork
+          - SKAdNetworkIdentifier: 44jx6755aq.skadnetwork
+          - SKAdNetworkIdentifier: k674qkevps.skadnetwork
+          - SKAdNetworkIdentifier: 4468km3ulz.skadnetwork
+          - SKAdNetworkIdentifier: 2u9pt9hc89.skadnetwork
+          - SKAdNetworkIdentifier: 8s468mfl3y.skadnetwork
+          - SKAdNetworkIdentifier: klf5c3l5u5.skadnetwork
+          - SKAdNetworkIdentifier: ppxm28t8ap.skadnetwork
+          - SKAdNetworkIdentifier: kbmxgpxpgc.skadnetwork
+          - SKAdNetworkIdentifier: uw77j35x4d.skadnetwork
+          - SKAdNetworkIdentifier: 578prtvx9j.skadnetwork
+          - SKAdNetworkIdentifier: 4dzt52r2t5.skadnetwork
+          - SKAdNetworkIdentifier: tl55sbb4fm.skadnetwork
+          - SKAdNetworkIdentifier: c3frkrj4fj.skadnetwork
+          - SKAdNetworkIdentifier: e5fvkxwrpn.skadnetwork
+          - SKAdNetworkIdentifier: 8c4e2ghe7u.skadnetwork
+          - SKAdNetworkIdentifier: 3rd42ekr43.skadnetwork
+          - SKAdNetworkIdentifier: 97r2b46745.skadnetwork
+          - SKAdNetworkIdentifier: 3qcr597p9d.skadnetwork
+        UIApplicationSupportsIndirectInputEvents: true
+        UIStatusBarHidden: true
+        UIRequiresFullScreen: false
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: false
+        GCSupportsControllerUserInteraction: true
+        GCSupportedGameControllers:
+          - ProfileName: ExtendedGamepad
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # iPad: every orientation (needed for Split View, Slide Over and Stage Manager windows).
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: com.charlie.dsemu.nds-rom
+            UTTypeDescription: DS game image
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [nds]
+          - UTTypeIdentifier: com.charlie.dsemu.gba-rom
+            UTTypeDescription: Game Boy Advance game image
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [gba]
+          - UTTypeIdentifier: com.charlie.dsemu.gb-rom
+            UTTypeDescription: Game Boy game image
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [gb]
+          - UTTypeIdentifier: com.charlie.dsemu.gbc-rom
+            UTTypeDescription: Game Boy Color game image
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [gbc]
+          - UTTypeIdentifier: com.charlie.dsemu.nes-rom
+            UTTypeDescription: NES game image
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [nes]
+          - UTTypeIdentifier: com.charlie.dsemu.snes-rom
+            UTTypeDescription: Super NES game image
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [sfc, smc]
+          - UTTypeIdentifier: com.charlie.dsemu.n64-rom
+            UTTypeDescription: N64 game image
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [n64, z64, v64]
+          - UTTypeIdentifier: com.charlie.dsemu.3ds-rom
+            UTTypeDescription: 3DS game image
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [3ds, cci, cxi]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.charlie.dsemu
+        PRODUCT_NAME: TwinPlay
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-Violet AppIcon-A2bOcean AppIcon-Fire AppIcon-A2bLime AppIcon-NeonDark AppIcon-ClearGlass AppIcon-Classic AppIcon-Advance AppIcon-Midnight AppIcon-Pixel AppIcon-Crimson AppIcon-Ocean AppIcon-Lime AppIcon-Retro8Gray AppIcon-Retro8Red AppIcon-Retro8Black AppIcon-Retro8White AppIcon-Retro8Blue AppIcon-Retro16Gray AppIcon-Retro16Color AppIcon-Retro16Black AppIcon-Retro16Purple AppIcon-Retro16Teal AppIcon-Analog AppIcon-Clamshell"
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+        TARGETED_DEVICE_FAMILY: "1,2"   # #14 iPhone and iPad
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        # App Group group.com.charlierodriguez.nduo: shares the widget snapshot with the widget.
+        # #19 iCloud container iCloud.com.charlie.dsemu (iCloud Documents): iCloud saves.
+        CODE_SIGN_ENTITLEMENTS: Supporting/TwinPlay.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: DSEmu/Bridge/DSEmu-Bridging-Header.h
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Core/include"
+          - "$(SRCROOT)/Core/src"
+          - "$(SRCROOT)/Core/third_party/ares"
+          - "$(SRCROOT)/Core/third_party/ares/ares"
+          - "$(SRCROOT)/Core/third_party/ares/nall"
+          - "$(SRCROOT)/Core/third_party/ares/thirdparty/ymfm/src"
+          - "$(SRCROOT)/Core/third_party/ares/no-jit"
+          - "$(SRCROOT)/Vendor/rcheevos/include"
+        GCC_C_LANGUAGE_STANDARD: gnu11
+        OTHER_CPLUSPLUSFLAGS: ["$(OTHER_CFLAGS)", "-fwrapv"]
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        GENERATE_INFOPLIST_FILE: NO
+        LIBRARY_SEARCH_PATHS: ["$(inherited)", "$(SRCROOT)/Core/third_party/build"]
+        OTHER_LDFLAGS: ["$(inherited)", "-ltwinplay_n64", "-ltwinplay_3ds", "-lc++", "-lz",
+                        "-Wl,-exported_symbol,_twinplay_n64_push_samples",
+                        "-Wl,-exported_symbol,_twinplay_n64_read_pad",
+                        "-Wl,-exported_symbol,_twinplay_n64_store_frame",
+                        "-Wl,-exported_symbol,_vkGetInstanceProcAddr",
+                        "-Wl,-force_load,$(SRCROOT)/Core/third_party/MoltenVK/MoltenVK/static/MoltenVK.xcframework/$(MVK_SLICE)/libMoltenVK.a",
+                        "-Wl,-export_dynamic",
+                        "-framework", "Metal",
+                        "-framework", "OpenGLES", "-framework", "QuartzCore", "-framework", "Foundation",
+                        "-framework", "AVFoundation", "-framework", "IOSurface", "-framework", "AudioToolbox",
+                        "-framework", "Security", "-framework", "UIKit"]
+        MVK_SLICE: ios-arm64
+        "MVK_SLICE[sdk=iphoneos*]": ios-arm64
+        "MVK_SLICE[sdk=iphonesimulator*]": ios-arm64_x86_64-simulator
+        LD_RUNPATH_SEARCH_PATHS: ["$(inherited)", "@executable_path/Frameworks"]
+      configs:
+        Debug:
+          # The interpreter is too slow at -O0; keep debug builds optimised.
+          GCC_OPTIMIZATION_LEVEL: 3
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+          SWIFT_COMPILATION_MODE: wholemodule
+          GCC_PREPROCESSOR_DEFINITIONS: ["$(inherited)", "NDEBUG=1"]
+        Release:
+          GCC_OPTIMIZATION_LEVEL: 3
+          LLVM_LTO: YES_THIN       # ~3-4% faster core (headless bench)
+  TwinPlayWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"     # AppIntent-configured widgets; the app itself still runs on iOS 16
+    sources:
+      - path: TwinPlayWidget
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.charlie.dsemu.widget
+        PRODUCT_NAME: TwinPlayWidget
+        INFOPLIST_FILE: TwinPlayWidget/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: TwinPlayWidget/TwinPlayWidget.entitlements
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1,2"   # #14 iPhone and iPad
+        SKIP_INSTALL: YES
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+  TwinPlayTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Tests
+    dependencies:
+      - target: DSEmu
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.charlie.dsemu.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/TwinPlay.app/TwinPlay"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  DSEmu:
+    build:
+      targets:
+        DSEmu: all
+        TwinPlayTests: [test]
+    test:
+      config: Debug
+      targets:
+        - TwinPlayTests
+    run:
+      config: Debug
+      storeKitConfiguration: Supporting/TwinPlay.storekit

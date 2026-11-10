@@ -1,0 +1,42 @@
+// Copyright 2025 Citra Emulator Project / Azahar Emulator Project
+// Licensed under GPLv2 or any later version
+// Refer to the misc/licenses/gplv2.txt file included.
+
+#import <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+#import <UIKit/UIKit.h>
+#import <Foundation/Foundation.h>
+#else
+#import <Cocoa/Cocoa.h>
+#import <CoreGraphics/CoreGraphics.h>
+#import <Foundation/Foundation.h>
+#endif
+
+namespace AppleUtils {
+
+float GetRefreshRate() { // TODO: How does this handle multi-monitor? -OS
+#if TARGET_OS_IPHONE
+    return (float)[UIScreen mainScreen].maximumFramesPerSecond;
+#else
+    NSScreen* screen = [NSScreen mainScreen];
+    if (screen) {
+        NSDictionary* screenInfo = [screen deviceDescription];
+        CGDirectDisplayID displayID =
+            (CGDirectDisplayID)[screenInfo[@"NSScreenNumber"] unsignedIntValue];
+        CGDisplayModeRef displayMode = CGDisplayCopyDisplayMode(displayID);
+        if (displayMode) {
+            CGFloat refreshRate = CGDisplayModeGetRefreshRate(displayMode);
+            CFRelease(displayMode);
+            return refreshRate;
+        }
+    }
+
+    return 60; // Something went wrong, so just return a generic value
+#endif
+}
+
+int IsLowPowerModeEnabled() {
+    return (int)[NSProcessInfo processInfo].lowPowerModeEnabled;
+}
+
+} // namespace AppleUtils

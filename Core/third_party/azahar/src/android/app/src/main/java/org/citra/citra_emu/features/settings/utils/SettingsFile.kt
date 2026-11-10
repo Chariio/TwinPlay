@@ -1,0 +1,309 @@
+// Copyright 2023-2026 Citra Emulator Project / Azahar Emulator Project
+// Licensed under GPLv3 or any later version
+// Refer to the LICENSE.txt file included.
+
+package org.citra.citra_emu.features.settings.utils
+
+import android.content.Context
+import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
+import java.io.BufferedReader
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.io.InputStreamReader
+import org.citra.citra_emu.CitraApplication
+import org.citra.citra_emu.NativeLibrary
+import org.citra.citra_emu.R
+import org.citra.citra_emu.features.settings.model.AbstractSetting
+import org.citra.citra_emu.features.settings.model.BooleanSetting
+import org.citra.citra_emu.features.settings.model.CitraSettings
+import org.citra.citra_emu.features.settings.model.FloatSetting
+import org.citra.citra_emu.features.settings.model.InputMappingSetting
+import org.citra.citra_emu.features.settings.model.IntListSetting
+import org.citra.citra_emu.features.settings.model.IntSetting
+import org.citra.citra_emu.features.settings.model.StringSetting
+import org.citra.citra_emu.features.settings.ui.SettingsActivityView
+import org.citra.citra_emu.utils.DirectoryInitialization
+import org.citra.citra_emu.utils.DirectoryInitialization.userDirectory
+import org.citra.citra_emu.utils.Log
+import org.ini4j.Wini
+
+/**
+ * Contains static methods for interacting with .ini files in which settings are stored.
+ */
+object SettingsFile {
+    const val FILE_NAME_CONFIG = "config"
+    const val CUSTOM_DIR_NAME_CONFIG = "custom"
+
+    private val allSettings: List<AbstractSetting<*>> by lazy {
+        BooleanSetting.values().toList() +
+            IntSetting.values().toList() +
+            FloatSetting.values().toList() +
+            StringSetting.values().toList() +
+            IntListSetting.values().toList() +
+            InputMappingSetting.values().toList()
+    }
+
+    private fun findSettingByKey(key: String): AbstractSetting<*>? =
+        allSettings.firstOrNull { it.key == key }
+
+    /**
+     * Reads a given .ini file from disk and updates a instance of the Settings class appropriately
+     *
+     * @param ini          The ini file to load the settings from
+     * @param settings     The Settings instance to edit
+     * @param isCustomGame
+     * @param view         The current view.
+     * @return An Observable that emits a HashMap of the file's contents, then completes.
+     */
+    fun readFile(
+        ini: DocumentFile,
+        settings: CitraSettings,
+        isCustomGame: Boolean,
+        view: SettingsActivityView?
+    ) {
+        var reader: BufferedReader? = null
+        try {
+            val context: Context = CitraApplication.appContext
+            val inputStream = context.contentResolver.openInputStream(ini.uri)
+            reader = BufferedReader(InputStreamReader(inputStream))
+            var currentSection: String? = null
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                if (line!!.startsWith("[") && line.endsWith("]")) {
+                    currentSection = line.substring(1, line.length - 1)
+                } else if (currentSection != null) {
+                    val pair = parseLineToKeyValuePair(line) ?: continue
+                    val (key, rawValue) = pair
+                    val descriptor = findSettingByKey(key) ?: continue
+                    loadSettingInto(settings, descriptor, rawValue, isCustomGame)
+                }
+            }
+        } catch (e: FileNotFoundException) {
+            Log.error("[SettingsFile] File not found: " + ini.uri + e.message)
+            view?.onSettingsFileNotFound()
+        } catch (e: IOException) {
+            Log.error("[SettingsFile] Error reading from: " + ini.uri + e.message)
+            view?.onSettingsFileNotFound()
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close()
+                } catch (e: IOException) {
+                    Log.error("[SettingsFile] Error closing: " + ini.uri + e.message)
+                }
+            }
+        }
+    }
+
+    /**
+     * Load global settings from the config file into the settings instance
+     */
+    fun loadGlobalSettings(settings: CitraSettings, view: SettingsActivityView? = null) {
+        readFile(getSettingsFile(FILE_NAME_CONFIG), settings, false, view)
+    }
+
+    /**
+     * Load custom settings into the settings instance, sets gameId. Does not
+     * touch the global settings, so load them first if you need to.
+     */
+    fun loadCustomSettings(
+        settings: CitraSettings,
+        gameId: String,
+        view: SettingsActivityView? = null
+    ) {
+        settings.gameId = gameId
+        val file = findPerAppSettingsFile(gameId) ?: return
+        readFile(file, settings, true, view)
+    }
+
+    /**
+     * Uses the settings object to parse the raw string and store it in the correct map
+     */
+    private fun <T> loadSettingInto(
+        settings: CitraSettings,
+        setting: AbstractSetting<T>,
+        rawValue: String,
+        isCustomGame: Boolean
+    ) {
+        val value = setting.valueFromString(rawValue) ?: return
+        if (isCustomGame) {
+            settings.setOverride(setting, value)
+        } else {
+            settings.setGlobal(setting, value)
+        }
+    }
+
+    /**
+     * Saves a the global settings from a Settings instance
+     * to the global .ini file on disk. If unsuccessful, outputs an error
+     * telling why it failed.
+     *
+     * @param settings The Settings instance we are saving
+     * @param view     The current view.
+     */
+    fun saveGlobalFile(settings: CitraSettings, view: SettingsActivityView? = null) {
+        val ini = getSettingsFile(FILE_NAME_CONFIG)
+        try {
+            val context: Context = CitraApplication.appContext
+            val inputStream = context.contentResolver.openInputStream(ini.uri)
+            val writer = Wini(inputStream)
+            inputStream!!.close()
+
+            for (setting in allSettings) {
+                val value = settings.getGlobal(setting) ?: continue
+                writeSettingToWini(writer, setting, value)
+            }
+
+            val outputStream = context.contentResolver.openOutputStream(ini.uri, "wt")
+            writer.store(outputStream)
+            outputStream!!.flush()
+            outputStream.close()
+        } catch (e: Exception) {
+            Log.error("[SettingsFile] File not found: $FILE_NAME_CONFIG.ini: ${e.message}")
+            view?.showToastMessage(
+                CitraApplication.appContext
+                    .getString(R.string.error_saving, FILE_NAME_CONFIG, e.message),
+                false
+            )
+        }
+    }
+
+    /**
+     * Deletes the global settings file and re-creates it from defaults
+     */
+    fun deleteAndResetSettingsFile() {
+        val settingsFile = getSettingsFile(FILE_NAME_CONFIG)
+        if (!settingsFile.delete()) {
+            throw IOException("Failed to delete $settingsFile")
+        }
+        // Set the root of the document tree before we create a new config file or the native code
+        // will fail when creating the file.
+        if (DirectoryInitialization.setCitraUserDirectory()) {
+            CitraApplication.documentsTree.setRoot(Uri.parse(DirectoryInitialization.userPath))
+            NativeLibrary.createConfigFile()
+        } else {
+            throw IllegalStateException(
+                "Azahar directory unavailable when accessing config file!"
+            )
+        }
+    }
+
+    /**
+     * Save the per-game overrides to a per-game config file
+     */
+
+    fun saveCustomFile(settings: CitraSettings, view: SettingsActivityView? = null) {
+        if (!settings.isPerApp()) {
+            return
+        }
+        val ini = getOrCreatePerAppSettingsFile(settings.gameId!!)
+        try {
+            val context: Context = CitraApplication.appContext
+            val writer = Wini()
+
+            val overrides = settings.getAllOverrides()
+            for (descriptor in allSettings) {
+                val value = overrides[descriptor.key] ?: continue
+                writeSettingToWini(writer, descriptor, value)
+            }
+
+            val outputStream = context.contentResolver.openOutputStream(ini.uri, "wt")
+            writer.store(outputStream)
+            outputStream?.flush()
+            outputStream?.close()
+        } catch (e: Exception) {
+            Log.error(
+                "[SettingsFile] Error saving custom file for ${settings.gameId}: ${e.message}"
+            )
+            view?.onSettingsFileNotFound()
+        }
+    }
+
+    fun <T> saveSetting(setting: AbstractSetting<T>, settings: CitraSettings) {
+        if (settings.hasOverride(setting)) {
+            // Currently a per-game setting, keep it that way
+            val ini = getOrCreatePerAppSettingsFile(settings.gameId!!)
+            writeSingleSettingToFile(ini, setting, settings.get(setting))
+        } else {
+            // Currently global, save to global file
+            val ini = getSettingsFile(FILE_NAME_CONFIG)
+            writeSingleSettingToFile(ini, setting, settings.getGlobal(setting))
+        }
+    }
+
+    private fun <T> writeSingleSettingToFile(
+        ini: DocumentFile,
+        setting: AbstractSetting<T>,
+        value: T
+    ) {
+        try {
+            val context = CitraApplication.appContext
+            val inputStream = context.contentResolver.openInputStream(ini.uri)
+            val writer = if (inputStream != null) Wini(inputStream) else Wini()
+            inputStream?.close()
+            writeSettingToWini(writer, setting, value as Any)
+            val outputStream = context.contentResolver.openOutputStream(ini.uri, "wt")
+            writer.store(outputStream)
+            outputStream!!.flush()
+            outputStream.close()
+        } catch (e: Exception) {
+            Log.error("[SettingsFile] Error saving setting ${setting.key}: ${e.message}")
+        }
+    }
+
+    private fun <T> writeSettingToWini(writer: Wini, descriptor: AbstractSetting<T>, value: Any) {
+        @Suppress("UNCHECKED_CAST")
+        val typedValue = value as T
+        writer.put(descriptor.section, descriptor.key, descriptor.valueToString(typedValue))
+    }
+
+    private fun parseLineToKeyValuePair(line: String): Pair<String, String>? {
+        val splitLine = line.split("=".toRegex(), limit = 2)
+        if (splitLine.size != 2) return null
+        val key = splitLine[0].trim()
+        val value = splitLine[1].trim()
+        if (findSettingByKey(key) !is InputMappingSetting && value.isEmpty()) return null
+        return Pair(key, value)
+    }
+
+    fun getSettingsFile(fileName: String): DocumentFile {
+        val root = DocumentFile.fromTreeUri(CitraApplication.appContext, Uri.parse(userDirectory))
+        val configDirectory = root!!.findFile(FILE_NAME_CONFIG)
+        return configDirectory!!.findFile("$fileName.ini")!!
+    }
+
+    fun perAppFileExists(gameId: String): Boolean = findPerAppSettingsFile(gameId) != null
+
+    private fun findPerAppSettingsFile(gameId: String): DocumentFile? {
+        val root = DocumentFile.fromTreeUri(CitraApplication.appContext, Uri.parse(userDirectory))
+        val configDir = root?.findFile(FILE_NAME_CONFIG) ?: return null
+        val customDir = configDir.findFile(CUSTOM_DIR_NAME_CONFIG) ?: return null
+        return customDir.findFile("$gameId.ini")
+    }
+
+    private fun getOrCreatePerAppSettingsFile(gameId: String): DocumentFile {
+        val root = DocumentFile.fromTreeUri(CitraApplication.appContext, Uri.parse(userDirectory))!!
+        val configDir = root.findFile(FILE_NAME_CONFIG) ?: root.createDirectory(FILE_NAME_CONFIG)!!
+        val customDir =
+            configDir.findFile(CUSTOM_DIR_NAME_CONFIG)
+                ?: configDir.createDirectory(CUSTOM_DIR_NAME_CONFIG)!!
+        return customDir.findFile("$gameId.ini")
+            ?: customDir.createFile("*/*", "$gameId.ini")!!
+    }
+
+    fun deletePerAppFile(gameId: String?) {
+        if (gameId != null) findPerAppSettingsFile(gameId)?.delete()
+    }
+
+    fun deletePerAppSettingsDirectory() {
+        val root =
+            DocumentFile.fromTreeUri(CitraApplication.appContext, Uri.parse(userDirectory))
+        val configDir = root?.findFile(FILE_NAME_CONFIG)
+        val customDir = configDir?.findFile(CUSTOM_DIR_NAME_CONFIG)
+        customDir ?: return
+        if (!customDir.delete()) {
+            throw IOException("Failed to delete per-app settings directory")
+        }
+    }
+}

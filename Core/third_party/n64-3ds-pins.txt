@@ -1,0 +1,8 @@
+# Pinned sources for the N64 and 3DS cores. scripts/fetch-n64-3ds.sh clones these.
+# Dates below are the commits resolved on 2026-11-09. Do not float to a branch tip.
+
+mupen64plus-core a9ca8ec0b7decd17390c76c6341cf423d5d79321 https://github.com/mupen64plus/mupen64plus-core.git
+mupen64plus-rsp-hle dd09c7dcdc6d2cff584aacb9d519600d47d61039 https://github.com/mupen64plus/mupen64plus-rsp-hle.git
+GLideN64 a04081ad6a966a9413bea63a55f502e0dc98bb18 https://github.com/gonetz/GLideN64.git
+azahar 6b4e7f2e694514fdf2f72dc20368609b7cd4912e https://github.com/azahar-emu/azahar.git
+# azahar tag: 2127.0-rc2 (FastInterp, the JIT-less interpreter used on iOS)
