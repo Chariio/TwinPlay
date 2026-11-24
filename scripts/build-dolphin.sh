@@ -54,6 +54,7 @@ COMMON=(
   -DENCODE_FRAMEDUMPS=OFF
   -DUSE_UPNP=OFF
   -DENABLE_SDL=OFF
+  -DENABLE_CUBEB=OFF
   -DDISTRIBUTOR=TwinPlay
 )
 
@@ -62,8 +63,7 @@ if [[ "$TARGET" == "macos" ]]; then
     -DENABLE_GENERIC=OFF \
     -DENABLE_NOGUI=ON \
     -DENABLE_VULKAN=ON \
-    -DUSE_BUNDLED_MOLTENVK=ON \
-    -DENABLE_CUBEB=ON
+    -DUSE_BUNDLED_MOLTENVK=ON
   ninja -C "$BUILD" dolphin-nogui
   python3 "$ROOT/scripts/check-dolphin-build.py" macos "$BUILD"
   python3 "$ROOT/scripts/compile-gc-host.py" "$BUILD/compile_commands.json" \
@@ -79,7 +79,6 @@ else
     -DENABLE_NOGUI=OFF \
     -DENABLE_VULKAN=OFF \
     -DUSE_BUNDLED_MOLTENVK=OFF \
-    -DENABLE_CUBEB=ON \
     -DCMAKE_C_FLAGS="-fno-fast-math" \
     -DCMAKE_CXX_FLAGS="-fno-fast-math"
   ninja -C "$BUILD" core videometal

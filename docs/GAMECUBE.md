@@ -38,7 +38,7 @@ GitHub Actions (`.github/workflows/dolphin-gamecube.yml`) runs both on `macos-26
 - The host object is not linked into `TwinPlay.app`. Boot, pad, pixels and audio are implemented only as far as the host file; the app you run from Xcode still hits the stub.
 - `BootManager::BootCore` is called with a headless window. There is no `CAMetalLayer` in TwinPlay's screen, so Dolphin has nowhere to draw. `twinplay_gc_copy_frame` returns no pixels. Lid, orientation and window code were left alone.
 - GameCube pad bits are stored in the session and not yet written into Dolphin's serial interface.
-- Audio is not copied back into TwinPlay's 48 kHz ring. The iOS CMake build still tries Cubeb; if that fails, the log is the source of truth.
+- Audio is not copied back into TwinPlay's 48 kHz ring. CI builds Dolphin with Cubeb off: its Rust CoreAudio static library is not produced by Ninja on the GitHub image, and the core still links with Dolphin's null audio backend.
 - Save states are not wired. A real boot would use Dolphin's memory card under the user directory (the game's save folder). That directory is set only when the host is linked.
 - Official Dolphin has no iOS app target. The iOS job cross-compiles the `core` and `videometal` libraries. If that job fails, GameCube still appears in the library and the stub explains that the core is not linked. The known iOS port is [dolphin-ios](https://github.com/OatmealDome/dolphin-ios); this branch stays on `dolphin-emu/dolphin`, as requested.
 
