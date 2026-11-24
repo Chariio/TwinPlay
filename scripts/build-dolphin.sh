@@ -69,6 +69,59 @@ if [[ "$TARGET" == "macos" ]]; then
   python3 "$ROOT/scripts/compile-gc-host.py" "$BUILD/compile_commands.json" \
     "$ROOT/Core/gamecube/twinplay_gc_host.cpp"
 else
+  # The iOS SDK has no IOCFBundle.h (libusb), no AppKit/NSOpenGL (AGL), and no
+  # Cocoa Quartz keyboard backend. Those stay in the macOS build.
+  python3 - "$SRC" << 'PY'
+import pathlib, sys
+root = pathlib.Path(sys.argv[1])
+edits = [
+    (
+        root / "CMakeLists.txt",
+        """if(NOT ANDROID)
+  dolphin_find_optional_system_library(LibUSB Externals/libusb)
+  add_definitions(-D__LIBUSB__)
+endif()""",
+        """if(NOT ANDROID AND NOT IOS)
+  dolphin_find_optional_system_library(LibUSB Externals/libusb)
+  add_definitions(-D__LIBUSB__)
+endif()""",
+    ),
+    (
+        root / "Source/Core/Common/CMakeLists.txt",
+        """    ${APPKIT_LIBRARY}
+    ${COREFOUNDATION_LIBRARY}""",
+        """    ${COREFOUNDATION_LIBRARY}""",
+    ),
+    (
+        root / "Source/Core/InputCommon/CMakeLists.txt",
+        """elseif(APPLE)
+  target_sources(inputcommon PRIVATE
+    ControllerInterface/Quartz/Quartz.h""",
+        """elseif(APPLE AND NOT IOS)
+  target_sources(inputcommon PRIVATE
+    ControllerInterface/Quartz/Quartz.h""",
+    ),
+    (
+        root / "Source/Core/Common/CMakeLists.txt",
+        """elseif(APPLE)
+  target_sources(common PRIVATE
+    GL/GLInterface/AGL.h
+    GL/GLInterface/AGL.mm
+  )""",
+        """elseif(APPLE AND NOT IOS)
+  target_sources(common PRIVATE
+    GL/GLInterface/AGL.h
+    GL/GLInterface/AGL.mm
+  )""",
+    ),
+]
+for path, old, new in edits:
+    text = path.read_text()
+    if old not in text:
+        raise SystemExit(f"iOS patch did not match {path}")
+    path.write_text(text.replace(old, new, 1))
+    print(f"iOS patch applied: {path.name}")
+PY
   # JIT-less. ENABLE_GENERIC defines _M_GENERIC and does not compile JitArm64.
   # -fno-fast-math: Dolphin's cached interpreter miscompiles under fast-math.
   cmake -S "$SRC" -B "$BUILD" "${COMMON[@]}" \

@@ -27,7 +27,7 @@ export CODE_SIGNING_ALLOWED=NO
 ./scripts/build-dolphin.sh ios     # ARM64, -DENABLE_GENERIC=ON, Metal, no JIT
 ```
 
-The pin is `Core/third_party/dolphin-pin.txt` (`0318069674bbd7971f0db434fe1f7bd9f1c5750e` on `dolphin-emu/dolphin`). The checkout is gitignored.
+The pin is `Core/third_party/dolphin-pin.txt` (`0318069674bbd7971f0db434fe1f7bd9f1c5750e` on `dolphin-emu/dolphin`). The checkout is gitignored. The iOS configure step turns off libusb, AppKit, the AGL OpenGL backend, and the Quartz keyboard backend, because those are macOS-only. The Mac build does not apply that patch.
 
 GitHub Actions (`.github/workflows/dolphin-gamecube.yml`) runs both on `macos-26` (Xcode 26, AppleClang 21, which this Dolphin pin requires) with `CODE_SIGNING_ALLOWED=NO`. It does not sign, and it does not upload to App Store Connect or TestFlight. No secrets.
 
