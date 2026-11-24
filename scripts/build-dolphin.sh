@@ -193,6 +193,27 @@ if old_gc not in at:
     raise SystemExit("GCAdapter.cpp libusb guard not found")
 adapter.write_text(at.replace(old_gc, new_gc, 1))
 print("iOS patch applied: GCAdapter.cpp")
+util_h = root / "Source/Core/VideoBackends/Metal/MTLUtil.h"
+uh = util_h.read_text()
+old_inc = "#include <AppKit/NSScreen.h>"
+new_inc = "#ifndef TWINPLAY_IOS_METAL\n#include <AppKit/NSScreen.h>\n#endif"
+if old_inc not in uh:
+    raise SystemExit("MTLUtil.h AppKit include not found")
+util_h.write_text(uh.replace(old_inc, new_inc, 1))
+util_mm = root / "Source/Core/VideoBackends/Metal/MTLUtil.mm"
+um = util_mm.read_text()
+old_hdr = """  backend_info->bSupportsHDROutput =
+      1.0 < [[NSScreen deepestScreen] maximumPotentialExtendedDynamicRangeColorComponentValue];"""
+new_hdr = """#ifdef TWINPLAY_IOS_METAL
+  backend_info->bSupportsHDROutput = false;
+#else
+  backend_info->bSupportsHDROutput =
+      1.0 < [[NSScreen deepestScreen] maximumPotentialExtendedDynamicRangeColorComponentValue];
+#endif"""
+if old_hdr not in um:
+    raise SystemExit("MTLUtil.mm NSScreen check not found")
+util_mm.write_text(um.replace(old_hdr, new_hdr, 1))
+print("iOS patch applied: MTLUtil")
 PY
   # JIT-less. ENABLE_GENERIC defines _M_GENERIC and does not compile JitArm64.
   # -fno-fast-math: Dolphin's cached interpreter miscompiles under fast-math.
@@ -204,9 +225,9 @@ PY
     -DENABLE_NOGUI=OFF \
     -DENABLE_VULKAN=OFF \
     -DUSE_BUNDLED_MOLTENVK=OFF \
-    -DCMAKE_C_FLAGS="-fno-fast-math -DTWINPLAY_NO_LIBUSB=1" \
-    -DCMAKE_CXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1 -DTWINPLAY_NO_LIBUSB=1" \
-    -DCMAKE_OBJCXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1 -DTWINPLAY_NO_LIBUSB=1"
+    -DCMAKE_C_FLAGS="-fno-fast-math -DTWINPLAY_NO_LIBUSB=1 -DTWINPLAY_IOS_METAL=1" \
+    -DCMAKE_CXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1 -DTWINPLAY_NO_LIBUSB=1 -DTWINPLAY_IOS_METAL=1" \
+    -DCMAKE_OBJCXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1 -DTWINPLAY_NO_LIBUSB=1 -DTWINPLAY_IOS_METAL=1"
   ninja -C "$BUILD" core videometal
   python3 "$ROOT/scripts/check-dolphin-build.py" ios "$BUILD"
   python3 "$ROOT/scripts/compile-gc-host.py" "$BUILD/compile_commands.json" \
