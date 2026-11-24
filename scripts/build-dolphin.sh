@@ -170,6 +170,14 @@ if old_fs not in wt or old_fb not in wt:
     raise SystemExit("watcher.hpp FSEvents guards not found")
 watcher.write_text(wt.replace(old_fs, new_fs, 1).replace(old_fb, new_fb, 1))
 print("iOS patch applied: watcher.hpp")
+adapter = root / "Source/Core/InputCommon/GCAdapter.cpp"
+at = adapter.read_text()
+old_gc = "#ifndef ANDROID\n#define GCADAPTER_USE_LIBUSB_IMPLEMENTATION true"
+new_gc = "#if !defined(ANDROID) && !defined(TWINPLAY_NO_LIBUSB)\n#define GCADAPTER_USE_LIBUSB_IMPLEMENTATION true"
+if old_gc not in at:
+    raise SystemExit("GCAdapter.cpp libusb guard not found")
+adapter.write_text(at.replace(old_gc, new_gc, 1))
+print("iOS patch applied: GCAdapter.cpp")
 PY
   # JIT-less. ENABLE_GENERIC defines _M_GENERIC and does not compile JitArm64.
   # -fno-fast-math: Dolphin's cached interpreter miscompiles under fast-math.
@@ -181,9 +189,9 @@ PY
     -DENABLE_NOGUI=OFF \
     -DENABLE_VULKAN=OFF \
     -DUSE_BUNDLED_MOLTENVK=OFF \
-    -DCMAKE_C_FLAGS="-fno-fast-math" \
-    -DCMAKE_CXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1" \
-    -DCMAKE_OBJCXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1"
+    -DCMAKE_C_FLAGS="-fno-fast-math -DTWINPLAY_NO_LIBUSB=1" \
+    -DCMAKE_CXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1 -DTWINPLAY_NO_LIBUSB=1" \
+    -DCMAKE_OBJCXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1 -DTWINPLAY_NO_LIBUSB=1"
   ninja -C "$BUILD" core videometal
   python3 "$ROOT/scripts/check-dolphin-build.py" ios "$BUILD"
   python3 "$ROOT/scripts/compile-gc-host.py" "$BUILD/compile_commands.json" \
