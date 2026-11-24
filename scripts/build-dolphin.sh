@@ -172,8 +172,23 @@ watcher.write_text(wt.replace(old_fs, new_fs, 1).replace(old_fb, new_fb, 1))
 print("iOS patch applied: watcher.hpp")
 adapter = root / "Source/Core/InputCommon/GCAdapter.cpp"
 at = adapter.read_text()
-old_gc = "#ifndef ANDROID\n#define GCADAPTER_USE_LIBUSB_IMPLEMENTATION true"
-new_gc = "#if !defined(ANDROID) && !defined(TWINPLAY_NO_LIBUSB)\n#define GCADAPTER_USE_LIBUSB_IMPLEMENTATION true"
+old_gc = """#ifndef ANDROID
+#define GCADAPTER_USE_LIBUSB_IMPLEMENTATION true
+#define GCADAPTER_USE_ANDROID_IMPLEMENTATION false
+#else
+#define GCADAPTER_USE_LIBUSB_IMPLEMENTATION false
+#define GCADAPTER_USE_ANDROID_IMPLEMENTATION true
+#endif"""
+new_gc = """#if !defined(ANDROID) && !defined(TWINPLAY_NO_LIBUSB)
+#define GCADAPTER_USE_LIBUSB_IMPLEMENTATION true
+#define GCADAPTER_USE_ANDROID_IMPLEMENTATION false
+#elif defined(ANDROID)
+#define GCADAPTER_USE_LIBUSB_IMPLEMENTATION false
+#define GCADAPTER_USE_ANDROID_IMPLEMENTATION true
+#else
+#define GCADAPTER_USE_LIBUSB_IMPLEMENTATION false
+#define GCADAPTER_USE_ANDROID_IMPLEMENTATION false
+#endif"""
 if old_gc not in at:
     raise SystemExit("GCAdapter.cpp libusb guard not found")
 adapter.write_text(at.replace(old_gc, new_gc, 1))
