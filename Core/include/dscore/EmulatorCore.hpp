@@ -132,7 +132,7 @@ public:
     // 2 = Game Boy, 3 = Game Boy Color (one 160x144 picture in the top-left of screen 0).
     // 4 = NES (one 256x240 picture), 5 = Super NES (one 256x224 picture).
     // 6 = N64 (one picture, presented in the 256x192 top buffer). 7 = 3DS (two screens,
-    // presented in the same 256x192 pair the DS uses).
+    // presented in the same 256x192 pair the DS uses). 8 = Dreamcast (one picture).
     virtual int system() const { return 0; }
     // Game Boy only: DMG shade palette (0 green, 1 gray) and LCD colour correction for GBC colours.
     virtual void setVideoOptions(int /*dmgPalette*/, bool /*colorCorrect*/) {}
@@ -144,7 +144,7 @@ public:
     virtual std::string statusText() const { return {}; }
 };
 
-enum class CoreKind { TestPattern, Interpreter, GBA, GB, NES, SNES, N64, N3DS };
+enum class CoreKind { TestPattern, Interpreter, GBA, GB, NES, SNES, N64, N3DS, Dreamcast };
 // True if the image looks like a Game Boy / Game Boy Color cartridge (header checksum at 0x14D).
 bool isGBImage(const u8* data, size_t size);
 // True if the image looks like a Game Boy Advance cartridge (ARM branch at 0, fixed byte 0x96 at 0xB2).
@@ -156,6 +156,8 @@ bool isSNESImage(const u8* data, size_t size);
 // N64: z64 (0x80371240), v64 byte-swapped, or n64 word-swapped. 3DS: NCSD (.3ds/.cci) or NCCH (.cxi).
 bool isN64Image(const u8* data, size_t size);
 bool is3DSImage(const u8* data, size_t size);
+// .cdi, .gdi, .chd, .cue or .zip. Track files (.bin) are not discs by themselves.
+bool isDreamcastDiscPath(const std::string& path);
 // Rewrites v64/n64 images to z64 in place. z64 is left unchanged.
 void normalizeN64(std::vector<u8>& rom);
 // Internal cartridge name (z64 offset 0x20, 20 bytes) after the image is normalized.

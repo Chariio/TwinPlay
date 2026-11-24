@@ -201,7 +201,7 @@ struct SkinPickerView: View {
                 case .ds: tab = .ds
                 case .nes: tab = .nes
                 case .snes: tab = .snes
-                case .n64: tab = .n64
+                case .n64, .dreamcast: tab = .n64
                 case .n3ds: tab = .n3ds
                 default: tab = .gba
                 }

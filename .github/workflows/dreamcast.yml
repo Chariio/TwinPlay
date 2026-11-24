@@ -1,0 +1,86 @@
+# Builds Flycast (no ROMs, no BIOS) and TwinPlay with code signing off.
+# Nothing is uploaded to App Store Connect or TestFlight. No secrets.
+name: Dreamcast
+
+on:
+  push:
+    branches: [dreamcast]
+  workflow_dispatch:
+
+concurrency:
+  group: dreamcast-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  # One macOS runner at a time. Asking for four at once gets jobs dropped with
+  # "not acquired by Runner of type hosted" while the pool is short.
+  # The iOS app is first: it is the job the latest commits still have to prove.
+  twinplay-ios:
+    name: TwinPlay iOS (signing off)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate the Xcode project
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/generate-project.sh
+      - name: Build DSEmu for generic iOS
+        env:
+          TWINPLAY_N64_3DS_STUB: "1"
+          TWINPLAY_FLYCAST_STUB: "1"
+        run: |
+          xcodebuild -project DSEmu.xcodeproj -scheme DSEmu \
+            -destination 'generic/platform=iOS' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+  twinplay-macos:
+    name: TwinPlay macOS host (signing off)
+    needs: twinplay-ios
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate the Xcode project
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/generate-project.sh
+      - name: Build the macOS Dreamcast host
+        run: |
+          xcodebuild -project DSEmu.xcodeproj -scheme TwinPlayFlycastProbe \
+            -destination 'platform=macOS,arch=arm64' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+  flycast-macos:
+    name: Flycast macOS arm64 (dynarec)
+    needs: twinplay-macos
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: brew install cmake ninja
+      - name: Build Flycast libretro
+        run: |
+          chmod +x scripts/*.sh
+          TWINPLAY_FLYCAST_PLATFORM=macos TWINPLAY_FLYCAST_REQUIRED=1 ./scripts/build-flycast.sh
+          echo "macOS Flycast dynarec dylib is present"
+
+  flycast-ios:
+    name: Flycast iOS arm64 (interpreter, no JIT)
+    needs: flycast-macos
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: brew install cmake ninja
+      - name: Build Flycast libretro without the dynarec
+        run: |
+          chmod +x scripts/*.sh
+          TWINPLAY_FLYCAST_PLATFORM=iphoneos TWINPLAY_FLYCAST_REQUIRED=1 ./scripts/build-flycast.sh
+          echo "iOS Flycast interpreter dylib is present"

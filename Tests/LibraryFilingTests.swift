@@ -41,6 +41,20 @@ final class LibraryFilingTests: XCTestCase {
         XCTAssertFalse(Skin.skins(for: .gba).contains(.nesFog))
     }
 
+    func testDreamcastExtensions() {
+        XCTAssertEqual(ROMLibrary.classify(ext: "cdi", headerSystem: nil, headerIsGBA: nil), .dreamcast)
+        XCTAssertEqual(ROMLibrary.classify(ext: "GDI", headerSystem: 0, headerIsGBA: false), .dreamcast)
+        XCTAssertEqual(ROMLibrary.classify(ext: "chd", headerSystem: nil, headerIsGBA: nil), .dreamcast)
+        XCTAssertEqual(ROMLibrary.classify(ext: "cue", headerSystem: 5, headerIsGBA: false), .dreamcast)
+        XCTAssertEqual(ROMLibrary.classify(ext: "zip", headerSystem: nil, headerIsGBA: nil), .dreamcast)
+        XCTAssertEqual(ROMLibrary.classify(ext: "bin", headerSystem: 8, headerIsGBA: false), .dreamcast)
+        XCTAssertEqual(ROMLibrary.classify(ext: "bin", headerSystem: 4, headerIsGBA: false), .nes)
+        XCTAssertEqual(ROMLibrary.trackNames(in: "FILE \"track01.bin\" BINARY\n"), ["track01.bin"])
+        XCTAssertEqual(GameSystem.dreamcast.isSingleScreen, true)
+        XCTAssertEqual(GameSystem.dreamcast.screenAspect, 4.0 / 3.0, accuracy: 0.001)
+        XCTAssertEqual(DreamcastNotice.devices.contains("iPhone 15 Pro"), true)
+    }
+
     func testUnknownExtensionFallsBackToHeader() {
         XCTAssertEqual(ROMLibrary.classify(ext: "bin", headerSystem: 1, headerIsGBA: true), .gba)
         XCTAssertEqual(ROMLibrary.classify(ext: "bin", headerSystem: 3, headerIsGBA: false), .gbc)

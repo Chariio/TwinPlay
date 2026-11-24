@@ -37972,6 +37972,106 @@
           }
         }
       }
+    },
+    "Designed for modern iPhone and iPad (iPhone 15 Pro or newer, or an iPad with an M-series chip). Older devices may run slowly.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pensado para iPhone y iPad recientes (iPhone 15 Pro o posterior, o un iPad con chip de la serie M). En dispositivos más antiguos puede ir lento."
+          }
+        }
+      }
+    },
+    "No Dreamcast games yet. Use Add Games for .cdi, .gdi (and its tracks), .chd, .cue or .zip.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todavía no hay juegos de Dreamcast. Usa Añadir juegos para .cdi, .gdi (con sus pistas), .chd, .cue o .zip."
+          }
+        }
+      }
+    },
+    "No Dreamcast games yet.\nAdd a .cdi, .gdi (with its tracks), .chd, .cue or .zip.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todavía no hay juegos de Dreamcast.\nAñade un .cdi, .gdi (con sus pistas), .chd, .cue o .zip."
+          }
+        }
+      }
+    },
+    "Add your own games with the + button: .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci, .cxi, or Dreamcast .cdi, .gdi (with its tracks), .chd, .cue or .zip. Pick files, or a whole folder.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade tus juegos con el botón +: .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci, .cxi, o de Dreamcast .cdi, .gdi (con sus pistas), .chd, .cue o .zip. Elige archivos o una carpeta."
+          }
+        }
+      }
+    },
+    "Optional. Leave this empty and Flycast's HLE BIOS is used. If you dumped your own console, import dc_boot.bin (2 MB) and dc_flash.bin (128 KB). TwinPlay never includes or downloads them.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opcional. Si lo dejas vacío, TwinPlay usa la BIOS HLE de Flycast. Si volcaste tu propia consola, importa dc_boot.bin (2 MB) y dc_flash.bin (128 KB). TwinPlay nunca los incluye ni los descarga."
+          }
+        }
+      }
+    },
+    "Using Flycast's built-in BIOS. No file is required.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usando la BIOS integrada de Flycast. No hace falta ningún archivo."
+          }
+        }
+      }
+    },
+    "Using your Dreamcast BIOS": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usando tu BIOS de Dreamcast"
+          }
+        }
+      }
+    },
+    "Dreamcast BIOS": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BIOS de Dreamcast"
+          }
+        }
+      }
+    },
+    "Dreamcast flash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flash de Dreamcast"
+          }
+        }
+      }
+    },
+    "Dreamcast": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dreamcast"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -141,13 +141,21 @@ final class EmulatorSession: ObservableObject, Identifiable {
             let snes = gbSystem == 0 && !nes && DSCoreBridge.isSNESROM(at: romURL)
             let n64 = gbSystem == 0 && !nes && !snes && DSCoreBridge.isN64ROM(at: romURL)
             let n3ds = gbSystem == 0 && !nes && !snes && !n64 && DSCoreBridge.is3DSROM(at: romURL)
-            let gba = gbSystem == 0 && !nes && !snes && !n64 && !n3ds && DSCoreBridge.isGBAROM(at: romURL)
+            let dreamcast = gbSystem == 0 && !nes && !snes && !n64 && !n3ds && DSCoreBridge.isDreamcastROM(at: romURL)
+            let gba = gbSystem == 0 && !nes && !snes && !n64 && !n3ds && !dreamcast && DSCoreBridge.isGBAROM(at: romURL)
             if gbSystem != 0 {
                 core = DSCoreBridge(kind: .gb)
                 BIOSStore.shared.applyGameBoy(to: core, color: gbSystem == 3)
                 try core.loadROM(at: romURL)
                 system = core.isGameBoyColor ? .gbc : .gb
                 Self.applyGameBoyVideo(core)
+            } else if dreamcast {
+                core = DSCoreBridge(kind: .dreamcast)
+                let bios = BIOSStore.shared
+                let hle = !(bios.enabled && bios.info[.dcBoot] != nil)
+                core.setDreamcastSystemDirectory(bios.directory.path, useHLEBIOS: hle)
+                try core.loadROM(at: romURL)
+                system = .dreamcast
             } else if n64 || n3ds {
                 core = DSCoreBridge(kind: n64 ? .n64 : .n3ds)
                 if n3ds {
@@ -268,7 +276,7 @@ final class EmulatorSession: ObservableObject, Identifiable {
             switch system {
             case .ds: return 59.8261
             case .nes, .snes: return 60.0988                     // NTSC
-            case .n64, .n3ds: return 60
+            case .n64, .n3ds, .dreamcast: return 60
             default: return 59.7275                              // GBA/GB/GBC: 4.194 MHz / 70224 clocks
             }
         }()
@@ -691,7 +699,7 @@ final class EmulatorSession: ObservableObject, Identifiable {
     }
 
     private func pushAnalog() {
-        guard system == .n64 || system == .n3ds else { return }
+        guard system == .n64 || system == .n3ds || system == .dreamcast else { return }
         let useTouch = hypot(touchStick.0, touchStick.1) > 0.05
         let main = useTouch ? touchStick : controllers.analog
         core.setAnalog(x: main.0, y: main.1, stick: 0)

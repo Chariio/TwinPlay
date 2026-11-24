@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Which console a game (or a skin) belongs to.
 enum GameSystem: String, CaseIterable, Identifiable, Codable {
-    case ds, gba, gb, gbc, nes, snes, n64, n3ds
+    case ds, gba, gb, gbc, nes, snes, n64, n3ds, dreamcast
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -16,6 +16,7 @@ enum GameSystem: String, CaseIterable, Identifiable, Codable {
         case .snes: return "SNES"
         case .n64: return "N64"
         case .n3ds: return "3DS"
+        case .dreamcast: return "Dreamcast"
         }
     }
     var longName: String {
@@ -28,6 +29,7 @@ enum GameSystem: String, CaseIterable, Identifiable, Codable {
         case .snes: return "Super NES"
         case .n64: return "N64"
         case .n3ds: return "3DS"
+        case .dreamcast: return "Dreamcast"
         }
     }
     /// One screen instead of the DS's two. 3DS keeps the DS pair.
@@ -41,7 +43,7 @@ enum GameSystem: String, CaseIterable, Identifiable, Codable {
         case .gb, .gbc: return 160.0 / 144.0
         case .nes: return 256.0 / 240.0
         case .snes: return 256.0 / 224.0
-        case .n64, .n3ds: return 4.0 / 3.0
+        case .n64, .n3ds, .dreamcast: return 4.0 / 3.0
         }
     }
     /// Which skin catalogue this console uses. Game Boy and Game Boy Color share the GBA catalogue.
@@ -51,7 +53,7 @@ enum GameSystem: String, CaseIterable, Identifiable, Codable {
         case .ds: return .ds
         case .nes: return .nes
         case .snes: return .snes
-        case .n64: return .n64
+        case .n64, .dreamcast: return .n64
         case .n3ds: return .n3ds
         case .gba, .gb, .gbc: return .gba
         }
@@ -71,7 +73,7 @@ enum GameSystem: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .nes: return .nesFog
         case .snes: return .snesFog
-        case .n64: return .n64Original
+        case .n64, .dreamcast: return .n64Original
         case .n3ds: return .n3dsPearl
         default: return skinSystem == .ds ? .classicGray : .gbaIndigo
         }
@@ -242,7 +244,7 @@ enum Skin: String, CaseIterable, Identifiable {
         case .gbc: return .gbcGrape
         case .nes: return .nesFog
         case .snes: return .snesFog
-        case .n64: return .n64Original
+        case .n64, .dreamcast: return .n64Original
         case .n3ds: return .n3dsPearl
         default: return .gbaIndigo
         }

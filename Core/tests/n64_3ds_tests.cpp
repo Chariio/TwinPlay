@@ -74,6 +74,20 @@ int main() {
     CHECK(ds->prefersPathLoad());
     CHECK(!ds->loadROMPath("/no/such/game.3ds", err));
 
+    CHECK(isDreamcastDiscPath("game.cdi"));
+    CHECK(isDreamcastDiscPath("Game.GDI"));
+    CHECK(isDreamcastDiscPath("/tmp/a.chd"));
+    CHECK(isDreamcastDiscPath("disc.cue"));
+    CHECK(isDreamcastDiscPath("disc.zip"));
+    CHECK(!isDreamcastDiscPath("track01.bin"));
+    CHECK(!isDreamcastDiscPath("game.z64"));
+    auto dc = createCore(CoreKind::Dreamcast);
+    CHECK(dc->system() == 8);
+    CHECK(dc->screenCount() == 1);
+    CHECK(dc->prefersPathLoad());
+    CHECK(!dc->loadROMPath("/no/such/game.cdi", err));
+    CHECK(err.find("not linked") != std::string::npos);
+
     if (failures) { std::printf("%d failed\n", failures); return 1; }
     std::printf("n64/3ds image tests passed\n");
     return 0;

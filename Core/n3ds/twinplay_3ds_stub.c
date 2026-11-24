@@ -21,3 +21,6 @@ int twinplay_3ds_copy_frame(int s, unsigned* d, int c, int* w, int* h) {
 int twinplay_3ds_read_audio(short* d, int n) { (void)d; (void)n; return 0; }
 int twinplay_3ds_save_state(unsigned char* d, int c) { (void)d; (void)c; return -1; }
 int twinplay_3ds_load_state(const unsigned char* s, int n) { (void)s; (void)n; return -1; }
+const char* twinplay_3ds_last_error(void) { return ""; }
+unsigned long long twinplay_3ds_frame_count(void) { return 0; }
+int twinplay_3ds_using_vulkan(void) { return 0; }

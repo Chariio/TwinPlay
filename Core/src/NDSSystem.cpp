@@ -1292,6 +1292,7 @@ std::unique_ptr<EmulatorCore> createNESCore();
 std::unique_ptr<EmulatorCore> createSNESCore();
 std::unique_ptr<EmulatorCore> createN64Core();
 std::unique_ptr<EmulatorCore> createN3DSCore();
+std::unique_ptr<EmulatorCore> createDreamcastCore();
 std::unique_ptr<EmulatorCore> createCore(CoreKind kind) {
     if (kind == CoreKind::TestPattern) return createTestPatternCore();
     if (kind == CoreKind::GBA) return createGBACore();
@@ -1300,6 +1301,7 @@ std::unique_ptr<EmulatorCore> createCore(CoreKind kind) {
     if (kind == CoreKind::SNES) return createSNESCore();
     if (kind == CoreKind::N64) return createN64Core();
     if (kind == CoreKind::N3DS) return createN3DSCore();
+    if (kind == CoreKind::Dreamcast) return createDreamcastCore();
     return std::make_unique<NDSSystem>();
 }
 

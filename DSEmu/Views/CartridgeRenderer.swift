@@ -47,7 +47,7 @@ enum CartColor: String, CaseIterable, Identifiable, Codable {
         switch system {
         case .gb: return .gray
         case .gbc: return .black          // colour-only paks were usually dark
-        case .nes, .snes, .n64, .n3ds: return .gray
+        case .nes, .snes, .n64, .n3ds, .dreamcast: return .gray
         case .gba: return known(gameCode: gameCode, isGBA: true)
         case .ds: return known(gameCode: gameCode, isGBA: false)
         }

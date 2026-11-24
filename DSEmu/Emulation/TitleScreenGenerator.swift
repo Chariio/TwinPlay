@@ -72,10 +72,11 @@ final class TitleScreenGenerator: ObservableObject {
         let snes = !gb && !nes && DSCoreBridge.isSNESROM(at: rom)
         let n64 = !gb && !nes && !snes && DSCoreBridge.isN64ROM(at: rom)
         let n3ds = !gb && !nes && !snes && !n64 && DSCoreBridge.is3DSROM(at: rom)
-        let gba = !gb && !nes && !snes && !n64 && !n3ds && DSCoreBridge.isGBAROM(at: rom)
+        let dreamcast = !gb && !nes && !snes && !n64 && !n3ds && DSCoreBridge.isDreamcastROM(at: rom)
+        let gba = !gb && !nes && !snes && !n64 && !n3ds && !dreamcast && DSCoreBridge.isGBAROM(at: rom)
         // DS games show publisher logos longer before the title (e.g. Super Mario 64 DS).
         let seconds = seconds ?? (gba || gb || nes || snes ? 10 : 18)
-        let core = DSCoreBridge(kind: gb ? .gb : n64 ? .n64 : n3ds ? .n3ds : nes ? .nes : snes ? .snes : gba ? .gba : .interpreter)
+        let core = DSCoreBridge(kind: gb ? .gb : dreamcast ? .dreamcast : n64 ? .n64 : n3ds ? .n3ds : nes ? .nes : snes ? .snes : gba ? .gba : .interpreter)
         if gb { EmulatorSession.applyGameBoyVideo(core) }
         core.renderScale = 1
         core.renderThreads = 0

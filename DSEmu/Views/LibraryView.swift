@@ -149,7 +149,7 @@ struct LibraryView: View {
         .debugForceLandscape()
         .overlay { if isClassic { libraryDialog } }
         .fileImporter(isPresented: Binding(get: { importer != nil }, set: { if !$0 { importer = nil } }),
-                      allowedContentTypes: importer == .cover ? [.image] : importer == .folder ? [.folder] : [ROMLibrary.ndsType, ROMLibrary.gbaType, ROMLibrary.gbType, ROMLibrary.gbcType, ROMLibrary.nesType, ROMLibrary.snesType, ROMLibrary.n64Type, ROMLibrary.n3dsType, .data],
+                      allowedContentTypes: importer == .cover ? [.image] : importer == .folder ? [.folder] : [ROMLibrary.ndsType, ROMLibrary.gbaType, ROMLibrary.gbType, ROMLibrary.gbcType, ROMLibrary.nesType, ROMLibrary.snesType, ROMLibrary.n64Type, ROMLibrary.n3dsType, ROMLibrary.dreamcastType, .data],
                       allowsMultipleSelection: importer == .games) { result in
             if importer == .folder {
                 importer = nil
@@ -409,6 +409,68 @@ struct LibraryView: View {
         }
     }
 
+    @ViewBuilder private var libraryGames: some View {
+        if isCoverFlow {
+            coverFlowGames
+        } else if filterSystem == nil {
+            allSystemSections
+        } else {
+            oneSystemSection
+        }
+    }
+
+    @ViewBuilder private var coverFlowGames: some View {
+        let list = filterSystem == nil
+            ? GameSystem.allCases.flatMap { library.sorted(sort, search: search, system: $0) }
+            : library.sorted(sort, search: search, system: filterSystem)
+        if list.isEmpty {
+            if !library.entries.isEmpty {
+                Text(search.isEmpty ? String(localized: "No \(filterSystem?.label ?? "") games yet.") : String(localized: "No games match “\(search)”."))
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            CoverFlowView(entries: list,
+                          style: { (Store.allows(.coverFlow) ? ($0.styleOverride ?? tileStyle) : .boxArt) },
+                          onPlay: { open(rom: $0.url) },
+                          menu: { AnyView(menu(for: $0)) },
+                          focus: $padFocus)
+                .frame(height: shortLandscape ? max(220, viewportHeight - 58) : 540)
+        }
+    }
+
+    @ViewBuilder private var allSystemSections: some View {
+        ForEach(GameSystem.allCases) { sys in
+            systemSection(sys)
+        }
+        if !library.entries.isEmpty && library.sorted(sort, search: search).isEmpty {
+            Text("No games match “\(search)”.").foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private func systemSection(_ sys: GameSystem) -> some View {
+        let list = library.sorted(sort, search: search, system: sys)
+        if !list.isEmpty || (sys == .dreamcast && DreamcastNotice.showOnThisDevice) {
+            Text(sys.longName).font(.title3.weight(.bold))
+            if sys == .dreamcast { DreamcastDevicesNote() }
+            if list.isEmpty {
+                Text("No Dreamcast games yet. Use Add Games for .cdi, .gdi (and its tracks), .chd, .cue or .zip.")
+                    .foregroundStyle(.secondary)
+            } else {
+                grid(list)
+            }
+        }
+    }
+
+    @ViewBuilder private var oneSystemSection: some View {
+        if filterSystem == .dreamcast { DreamcastDevicesNote().padding(.bottom, 4) }
+        let list = library.sorted(sort, search: search, system: filterSystem)
+        if !library.entries.isEmpty && list.isEmpty {
+            Text(search.isEmpty ? String(localized: "No \(filterSystem?.label ?? "") games yet.") : String(localized: "No games match “\(search)”."))
+                .foregroundStyle(.secondary)
+        }
+        grid(list)
+    }
+
     private func systemChip(_ title: String, tag: String) -> some View {
         let on = systemFilter == tag
         return Button { systemFilter = tag } label: {
@@ -423,8 +485,64 @@ struct LibraryView: View {
     }
 
     private var standardBody: some View {
-        NavigationStack {
-            ScrollViewReader { proxy in
+        NavigationStack { libraryPage }
+    }
+
+    private var libraryPage: some View {
+        libraryScroll
+            .overlay(alignment: .bottom) { libraryHints }
+            .safeAreaInset(edge: .bottom, spacing: 0) { LibraryAdBanner() }
+            .simultaneousGesture(DragGesture(minimumDistance: 12).onChanged { _ in hideHints() })
+            .simultaneousGesture(TapGesture().onEnded { pokeHints() })
+            .onAppear { pokeHints() }
+            .onChange(of: padFocus) { _ in pokeHints() }
+            .padScope("library") { handlePad($0) }
+            .background(LibraryBackgroundView())
+            .searchable(text: $search, prompt: "Search games")
+            .navigationTitle("TwinPlay")
+            .toolbar { libraryToolbar }
+            .overlay { libraryDialog }
+    }
+
+    @ViewBuilder private var libraryHints: some View {
+        if hintsVisible {
+            ControllerHintBar(items: [(.left, "Move"), (.a, "Play"), (.y, "Options"), (.x, isCoverFlow ? "Grid" : "Cover Flow"),
+                                      (.l, "Filter"), (.menu, "Settings")])
+                .padding(.bottom, 6)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .allowsHitTesting(false)
+        }
+    }
+
+    @ToolbarContentBuilder private var libraryToolbar: some ToolbarContent {
+        // .largeTitle placement exists in the iOS 26 SDK. Xcode 16.4 type-checks the
+        // availability branch and rejects the member.
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            ToolbarItem(placement: .largeTitle) {
+                Text("TwinPlay").font(.largeTitle.bold()).frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(backgroundID == "none" ? Color.primary : Color.white)
+            }
+        }
+        #endif
+        ToolbarItem(placement: .navigationBarLeading) {
+            Menu { libraryMenuItems } label: { Image(systemName: "line.3.horizontal") }
+                .accessibilityLabel("Library menu")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button { toggleLayout() } label: {
+                Image(systemName: isCoverFlow ? "square.grid.2x2" : "rectangle.stack")
+            }
+            .accessibilityLabel((isCoverFlow ? "Show as grid" : "Show as Cover Flow").loc)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Menu { importMenuItems } label: { Image(systemName: "plus") }
+                .accessibilityLabel("Add games")
+        }
+    }
+
+    private var libraryScroll: some View {
+        ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: shortLandscape ? 10 : 16) {
                     if navList.indices.contains(padFocus) {
@@ -447,49 +565,11 @@ struct LibraryView: View {
                     }
 
                     if library.entries.isEmpty {
-                        Text("Add your own .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci or .cxi games with the + button: pick files, or a whole folder (subfolders included).")
+                        Text("Add your own games with the + button: .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci, .cxi, or Dreamcast .cdi, .gdi (with its tracks), .chd, .cue or .zip. Pick files, or a whole folder.")
                             .foregroundStyle(.secondary)
                         ExperimentalNotice(onReport: nil).frame(maxWidth: .infinity)
                     }
-                    if isCoverFlow {
-                        let list = filterSystem == nil
-                            ? GameSystem.allCases.flatMap { library.sorted(sort, search: search, system: $0) }
-                            : library.sorted(sort, search: search, system: filterSystem)
-                        if list.isEmpty {
-                            if !library.entries.isEmpty {
-                                Text(search.isEmpty ? String(localized: "No \(filterSystem?.label ?? "") games yet.") : String(localized: "No games match “\(search)”."))
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else {
-                            CoverFlowView(entries: list,
-                                          style: { (Store.allows(.coverFlow) ? ($0.styleOverride ?? tileStyle) : .boxArt) },
-                                          onPlay: { open(rom: $0.url) },
-                                          menu: { AnyView(menu(for: $0)) },
-                                          focus: $padFocus)
-                                // Portrait: the usual tall stage. Landscape phone: fill what is left
-                                // of the screen under the filter row so the Play button stays visible.
-                                .frame(height: shortLandscape ? max(220, viewportHeight - 58) : 540)
-                        }
-                    } else if filterSystem == nil {
-                        // "All": one section per system.
-                        ForEach(GameSystem.allCases) { sys in
-                            let list = library.sorted(sort, search: search, system: sys)
-                            if !list.isEmpty {
-                                Text(sys.longName).font(.title3.weight(.bold))
-                                grid(list)
-                            }
-                        }
-                        if !library.entries.isEmpty && library.sorted(sort, search: search).isEmpty {
-                            Text("No games match “\(search)”.").foregroundStyle(.secondary)
-                        }
-                    } else {
-                        let list = library.sorted(sort, search: search, system: filterSystem)
-                        if !library.entries.isEmpty && list.isEmpty {
-                            Text(search.isEmpty ? String(localized: "No \(filterSystem?.label ?? "") games yet.") : String(localized: "No games match “\(search)”."))
-                                .foregroundStyle(.secondary)
-                        }
-                        grid(list)
-                    }
+                    libraryGames
 
                     // Footer: experimental notice + report button, at the very bottom of the list.
                     if !library.entries.isEmpty {
@@ -512,54 +592,6 @@ struct LibraryView: View {
                 // Visible height = frame minus the bars laid over it (nav bar, search + hint bar inset).
                 let h = g.size.height - g.safeAreaInsets.top - g.safeAreaInsets.bottom
                 Color.clear.onAppear { viewportHeight = h }.onChange(of: h) { viewportHeight = $0 } })
-            }
-            .overlay(alignment: .bottom) {
-                // Floats over the content (no layout jump) and fades out a few seconds after the last
-                // touch/button press or as soon as the library scrolls; any interaction brings it back.
-                if hintsVisible {
-                    ControllerHintBar(items: [(.left, "Move"), (.a, "Play"), (.y, "Options"), (.x, isCoverFlow ? "Grid" : "Cover Flow"),
-                                              (.l, "Filter"), (.menu, "Settings")])
-                        .padding(.bottom, 6)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        .allowsHitTesting(false)
-                }
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                LibraryAdBanner()
-            }
-            .simultaneousGesture(DragGesture(minimumDistance: 12).onChanged { _ in hideHints() })
-            .simultaneousGesture(TapGesture().onEnded { pokeHints() })
-            .onAppear { pokeHints() }
-            .onChange(of: padFocus) { _ in pokeHints() }
-            .padScope("library") { handlePad($0) }
-            .background(LibraryBackgroundView())
-            .searchable(text: $search, prompt: "Search games")
-            .navigationTitle("TwinPlay")
-            .toolbar {
-                // The large title sits on the library scene too: light-on-dark there (same rule as
-                // the content), otherwise it draws black in light mode.
-                if #available(iOS 26.0, *) {
-                    ToolbarItem(placement: .largeTitle) {
-                        Text("TwinPlay").font(.largeTitle.bold()).frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundStyle(backgroundID == "none" ? Color.primary : Color.white)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Menu { libraryMenuItems } label: { Image(systemName: "line.3.horizontal") }
-                        .accessibilityLabel("Library menu")
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { toggleLayout() } label: {
-                        Image(systemName: isCoverFlow ? "square.grid.2x2" : "rectangle.stack")
-                    }
-                    .accessibilityLabel((isCoverFlow ? "Show as grid" : "Show as Cover Flow").loc)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Menu { importMenuItems } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add games")
-                }
-            }
-            .overlay { libraryDialog }
         }
     }
 

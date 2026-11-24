@@ -27,3 +27,8 @@ xcuserdata/
 .env
 .env.*
 *.bin
+*.cdi
+*.gdi
+*.chd
+*.cue
+Core/third_party/flycast/

@@ -101,7 +101,7 @@ struct GameMenuView: View {
     static let gbaSaveTypes: [(Int, String)] = [(0, "Automatic"), (1, "EEPROM 512 B"), (2, "EEPROM 8 KB"),
                                                 (5, "SRAM 32 KB"), (7, "Flash 64 KB"), (8, "Flash 128 KB")]
     private var saveTypeOptions: [(Int, String)] {
-        if session.system == .nes || session.system == .snes || session.system == .n64 || session.system == .n3ds { return [] }
+        if session.system == .nes || session.system == .snes || session.system == .n64 || session.system == .n3ds || session.system == .dreamcast { return [] }
         return session.isGBA ? Self.gbaSaveTypes : Array(Self.saveTypes.enumerated()).map { ($0.offset, $0.element) }
     }
     private var skinBinding: Binding<String> {
@@ -128,6 +128,7 @@ struct GameMenuView: View {
         case .snes: return "Super NES skin"
         case .n64: return "N64 skin"
         case .n3ds: return "3DS skin"
+        case .dreamcast: return "Dreamcast skin"
         case .ds: return "DS skin"
         }
     }
@@ -367,7 +368,7 @@ struct GameMenuView: View {
             out.append(PadSection(title: "Save file (in-game saves)", footer: saveInfo.isEmpty ? nil : saveInfo, rows: [
                 PadRow(id: "delsave", title: "Delete save data…", icon: "trash", destructive: true, kind: .action { dialog = "deleteSave" }),
             ]))
-        } else if session.system == .nes || session.system == .snes || session.system == .n64 || session.system == .n3ds {
+        } else if session.system == .nes || session.system == .snes || session.system == .n64 || session.system == .n3ds || session.system == .dreamcast {
             out.append(PadSection(title: "Save file (in-game saves)", footer: saveInfo.isEmpty ? "Battery saves are written automatically." : saveInfo, rows: [
                 PadRow(id: "delsave", title: "Delete save data…", icon: "trash", destructive: true, kind: .action { dialog = "deleteSave" }),
             ]))

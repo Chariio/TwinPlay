@@ -9,13 +9,13 @@ import Foundation
 enum PadShape: Equatable { case circle, capsule, shoulder, dpad, dot, stick }
 
 /// Which system's controls to lay out.
-enum PadSystem: Equatable { case ds, gba, gameBoy, nes, snes, n64, n3ds }
+enum PadSystem: Equatable { case ds, gba, gameBoy, nes, snes, n64, n3ds, dreamcast }
 
 extension PadSystem {
     /// L and R exist on DS, GBA and Super NES. NES and Game Boy do not have shoulder buttons.
-    var showsShoulders: Bool { self == .ds || self == .gba || self == .snes || self == .n64 || self == .n3ds }
+    var showsShoulders: Bool { self == .ds || self == .gba || self == .snes || self == .n64 || self == .n3ds || self == .dreamcast }
     /// Four face buttons in a diamond (X above, B below, Y left, A right).
-    var diamondFace: Bool { self == .ds || self == .snes || self == .n3ds }
+    var diamondFace: Bool { self == .ds || self == .snes || self == .n3ds || self == .dreamcast }
 }
 
 /// One on-screen control: what it draws (`rect`) and where it can be touched (`hit`, larger).
@@ -212,7 +212,7 @@ struct TouchPadLayout: Equatable {
                 z.append(shoulder("ZR", .zr, CGRect(x: a.maxX - pad - w * 0.7, y: a.minY + 50, width: w * 0.7, height: h * 0.8)))
             }
         }
-        if sys == .n3ds, let stick = z.first(where: { $0.shape == .stick }) {
+        if (sys == .n3ds || sys == .dreamcast), let stick = z.first(where: { $0.shape == .stick }) {
             // Real 3DS: D-pad sits inward of the circle pad. Keep it off the screens and Start/Select.
             let d = min(unit * 0.70, 88)
             let cx = min(stick.rect.midX + unit * 0.62, a.midX - d / 2 - 8)
@@ -341,7 +341,7 @@ struct TouchPadLayout: Equatable {
     // MARK: building blocks
 
     private static func clusters(_ sys: PadSystem, unit u: CGFloat, left: CGPoint, right: CGPoint, steep: Bool = false) -> [PadZone] {
-        if sys == .n64 || sys == .n3ds { return analogClusters(sys, unit: u, left: left, right: right) }
+        if sys == .n64 || sys == .n3ds || sys == .dreamcast { return analogClusters(sys, unit: u, left: left, right: right) }
         let dRect = CGRect(x: left.x - u / 2, y: left.y - u / 2, width: u, height: u)
         var z = [PadZone(button: [.up, .down, .left, .right], label: "D-pad", shape: .dpad, rect: dRect,
                          hit: dRect.insetBy(dx: -u * 0.22, dy: -u * 0.22), hitRadius: nil, slideIn: false)]
@@ -374,7 +374,7 @@ struct TouchPadLayout: Equatable {
     /// N64: analog stick, A/B and the four C buttons. 3DS: circle pad and the face diamond.
     private static func analogClusters(_ sys: PadSystem, unit u: CGFloat, left: CGPoint, right: CGPoint) -> [PadZone] {
         let stick = CGRect(x: left.x - u / 2, y: left.y - u / 2, width: u, height: u)
-        var z = [PadZone(button: [], label: sys == .n64 ? "Stick" : "Circle", shape: .stick, rect: stick,
+        var z = [PadZone(button: [], label: sys == .n3ds ? "Circle" : "Stick", shape: .stick, rect: stick,
                          hit: stick.insetBy(dx: -u * 0.08, dy: -u * 0.08), hitRadius: nil, slideIn: false)]
         func face(_ label: String, _ b: DSButton, _ dx: CGFloat, _ dy: CGFloat, _ d: CGFloat) -> PadZone {
             let c = CGPoint(x: right.x + dx, y: right.y + dy)
@@ -383,7 +383,7 @@ struct TouchPadLayout: Equatable {
             return PadZone(button: b, label: label, shape: .circle, rect: rect,
                            hit: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2), hitRadius: r, slideIn: true)
         }
-        if sys == .n3ds {
+        if sys == .n3ds || sys == .dreamcast {
             let d = u * 0.34, o = u * 0.30
             z += [face("X", .x, 0, -o, d), face("B", .b, 0, o, d), face("Y", .y, -o, 0, d), face("A", .a, o, 0, d)]
         } else {

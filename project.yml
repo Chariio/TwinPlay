@@ -4,6 +4,7 @@ options:
   bundleIdPrefix: com.charlie
   deploymentTarget:
     iOS: "16.0"
+    macOS: "14.0"
   createIntermediateGroups: true
   developmentLanguage: en
 packages:
@@ -67,6 +68,9 @@ targets:
         buildPhase: resources
       - path: Core/include
         buildPhase: none
+      - path: Core/dreamcast
+        excludes:
+          - twinplay_flycast_stub.c
       - path: Vendor/rcheevos/src
       - path: Vendor/rcheevos/include
         buildPhase: none
@@ -83,6 +87,10 @@ targets:
       - name: N64 and 3DS cores
         script: |
           "${SRCROOT}/scripts/build-n64-3ds.sh"
+        basedOnDependencyAnalysis: false
+      - name: Dreamcast core
+        script: |
+          "${SRCROOT}/scripts/build-flycast.sh"
         basedOnDependencyAnalysis: false
     postCompileScripts:
       - name: Embed N64 plugins
@@ -105,6 +113,14 @@ targets:
           # CODESIGNING Invalid Page when GLideN64 called back into libmupen64plus.
           if [ -d "$APP/PlugIns" ]; then
             find "$APP/PlugIns" -maxdepth 1 -name "*.dylib" -delete
+          fi
+          FLY="$SRCROOT/Core/third_party/build/flycast/iphoneos/flycast_libretro.dylib"
+          if [ -f "$FLY" ]; then
+            cp -f "$FLY" "$DEST_FW/flycast_libretro.dylib"
+            install_name_tool -id "@rpath/flycast_libretro.dylib" "$DEST_FW/flycast_libretro.dylib" || true
+            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] && [ "${EXPANDED_CODE_SIGN_IDENTITY}" != "-" ]; then
+              codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --timestamp=none "$DEST_FW/flycast_libretro.dylib" || true
+            fi
           fi
           for name in libmupen64plus.dylib mupen64plus-video-GLideN64.dylib mupen64plus-rsp-hle.dylib mupen64plus-audio-twinplay.dylib mupen64plus-input-twinplay.dylib; do
             rm -f "$APP/$name"
@@ -247,6 +263,11 @@ targets:
             UTTypeConformsTo: [public.data]
             UTTypeTagSpecification:
               public.filename-extension: [3ds, cci, cxi]
+          - UTTypeIdentifier: com.charlie.dsemu.dreamcast-disc
+            UTTypeDescription: Dreamcast disc image
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [cdi, gdi, chd, cue, zip]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.charlie.dsemu
@@ -332,6 +353,26 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/TwinPlay.app/TwinPlay"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  TwinPlayFlycastProbe:
+    type: tool
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: tools/flycast-probe
+      - path: Core/dreamcast/twinplay_flycast_host.mm
+      - path: Core/dreamcast/twinplay_flycast.h
+        buildPhase: none
+    settings:
+      base:
+        PRODUCT_NAME: TwinPlayFlycastProbe
+        # Helper target. The app bundle id stays com.charlie.dsemu.
+        PRODUCT_BUNDLE_IDENTIFIER: com.charlie.dsemu.flycast-probe
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        CLANG_CXX_LANGUAGE_STANDARD: "c++20"
+        OTHER_LDFLAGS: ["$(inherited)", "-framework", "Foundation", "-framework", "OpenGL"]
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
 schemes:
   DSEmu:
     build:
@@ -345,3 +386,7 @@ schemes:
     run:
       config: Debug
       storeKitConfiguration: Supporting/TwinPlay.storekit
+  TwinPlayFlycastProbe:
+    build:
+      targets:
+        TwinPlayFlycastProbe: all

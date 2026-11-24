@@ -132,6 +132,7 @@ struct EmulatorView: View {
         case .snes: return .snes
         case .n64: return .n64
         case .n3ds: return .n3ds
+        case .dreamcast: return .dreamcast
         case .ds: return .ds
         }
     }
@@ -609,7 +610,7 @@ struct EmulatorView: View {
         case .gba: mode = "gba"
         case .nes: mode = "nes"
         case .snes: mode = "snes"
-        case .n64: mode = "n64"
+        case .n64, .dreamcast: mode = "n64"
         case .n3ds: mode = shownScreen.map { $0 == 0 ? "top" : "bottom" } ?? "both"
         case .ds: mode = shownScreen.map { $0 == 0 ? "top" : "bottom" } ?? "both"
         }
