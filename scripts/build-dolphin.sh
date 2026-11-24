@@ -108,6 +108,15 @@ endif()""",
 endif()""",
     ),
     (
+        root / "CMakeLists.txt",
+        """if(NOT ANDROID)
+  dolphin_find_optional_system_library(HIDAPI Externals/hidapi)
+endif()""",
+        """if(NOT ANDROID AND NOT IOS)
+  dolphin_find_optional_system_library(HIDAPI Externals/hidapi)
+endif()""",
+    ),
+    (
         root / "Source/Core/Common/CMakeLists.txt",
         """    ${APPKIT_LIBRARY}
     ${COREFOUNDATION_LIBRARY}""",
