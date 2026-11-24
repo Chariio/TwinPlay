@@ -9,6 +9,7 @@ final class BIOSStore: ObservableObject {
     enum Kind: String, CaseIterable, Identifiable {
         case ds9 = "bios9.bin", ds7 = "bios7.bin", dsFirmware = "firmware.bin", gba = "gba_bios.bin"
         case gbBoot = "dmg_boot.bin", gbcBoot = "cgb_boot.bin"
+        case dcBoot = "dc_boot.bin", dcFlash = "dc_flash.bin"
         var id: String { rawValue }
         var title: String { englishTitle.loc }
         /// English source text (the String Catalog key).
@@ -20,6 +21,8 @@ final class BIOSStore: ObservableObject {
             case .gba: return "GBA BIOS"
             case .gbBoot: return "Game Boy boot ROM"
             case .gbcBoot: return "Game Boy Color boot ROM"
+            case .dcBoot: return "Dreamcast BIOS"
+            case .dcFlash: return "Dreamcast flash"
             }
         }
         var sizes: [Int] {
@@ -29,9 +32,21 @@ final class BIOSStore: ObservableObject {
             case .dsFirmware: return [262144, 524288]
             case .gbBoot: return [256]
             case .gbcBoot: return [2304]
+            case .dcBoot: return [2_097_152]
+            case .dcFlash: return [131_072]
             }
         }
-        var sizeText: String { self == .dsFirmware ? "256 or 512 KB" : self == .gbBoot ? "256 bytes" : self == .gbcBoot ? "2304 bytes" : (self == .ds9 ? "4 KB" : "16 KB") }
+        var sizeText: String {
+            switch self {
+            case .dsFirmware: return "256 or 512 KB"
+            case .gbBoot: return "256 bytes"
+            case .gbcBoot: return "2304 bytes"
+            case .dcBoot: return "2 MB"
+            case .dcFlash: return "128 KB"
+            case .ds9: return "4 KB"
+            default: return "16 KB"
+            }
+        }
         /// CRC32 of known good dumps (firmware differs per console, so it is size-checked only).
         var knownCRCs: Set<UInt32> {
             switch self {
@@ -40,7 +55,7 @@ final class BIOSStore: ObservableObject {
             case .gba: return [0x81977335]
             case .gbBoot: return [0x59C8598E]
             case .gbcBoot: return [0x41884E46]
-            case .dsFirmware: return []
+            case .dsFirmware, .dcBoot, .dcFlash: return []
             }
         }
     }
@@ -101,7 +116,9 @@ final class BIOSStore: ObservableObject {
         if !enabled { enabled = true }          // importing a file means the user wants to use it
         let i = Self.check(d, as: k)
         let crc = String(format: "%08X", i.crc)
-        if k == .dsFirmware { return (true, String(localized: "Firmware saved (CRC32 \(crc)).")) }
+        if k == .dsFirmware || k == .dcBoot || k == .dcFlash {
+            return (true, String(localized: "\(k.title) saved (CRC32 \(crc))."))
+        }
         return (true, i.verified ? String(localized: "\(k.title) saved and verified (CRC32 \(crc)).")
                                  : String(localized: "\(k.title) saved, but its CRC32 \(crc) doesn't match a known good dump. It may not work."))
     }
@@ -123,6 +140,8 @@ final class BIOSStore: ObservableObject {
         case 262144, 524288: return .dsFirmware
         case 256: return .gbBoot
         case 2304: return .gbcBoot
+        case 2_097_152: return .dcBoot
+        case 131_072: return .dcFlash
         default: return nil
         }
     }

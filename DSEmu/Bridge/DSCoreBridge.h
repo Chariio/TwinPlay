@@ -15,6 +15,7 @@ typedef NS_ENUM(NSInteger, DSCoreKind) {
     DSCoreKindSNES NS_SWIFT_NAME(snes) = 5, // Super NES (single 256x224 screen)
     DSCoreKindN64 NS_SWIFT_NAME(n64) = 6,   // N64 (cached interpreter, no JIT)
     DSCoreKindN3DS NS_SWIFT_NAME(n3ds) = 7, // 3DS (Azahar FastInterp, no JIT)
+    DSCoreKindDreamcast NS_SWIFT_NAME(dreamcast) = 8, // Dreamcast (Flycast; iOS interpreter, no JIT)
 };
 
 /// Basic identity of a cartridge read from its header (DS or GBA). Used to find box art.
@@ -22,7 +23,7 @@ typedef NS_ENUM(NSInteger, DSCoreKind) {
 @property (nonatomic, copy) NSString *title;      // header title, e.g. "MARIOKART DS" / "GBAZELDA MC"
 @property (nonatomic, copy) NSString *gameCode;   // 4 characters, last one is the region (E USA, P Europe, J Japan)
 @property (nonatomic) BOOL isGBA;
-/// 0 DS, 1 GBA, 2 Game Boy, 3 Game Boy Color, 4 NES, 5 Super NES, 6 N64, 7 3DS.
+/// 0 DS, 1 GBA, 2 Game Boy, 3 Game Boy Color, 4 NES, 5 Super NES, 6 N64, 7 3DS, 8 Dreamcast.
 @property (nonatomic) NSInteger system;
 @end
 
@@ -127,6 +128,10 @@ typedef NS_ENUM(NSInteger, DSCoreKind) {
 + (BOOL)isN64ROMAtURL:(NSURL *)url NS_SWIFT_NAME(isN64ROM(at:));
 /// .3ds/.cci/.cxi, or an NCSD/NCCH magic at 0x100.
 + (BOOL)is3DSROMAtURL:(NSURL *)url NS_SWIFT_NAME(is3DSROM(at:));
+/// .cdi, .gdi, .chd, .cue or .zip. Track .bin files are not discs on their own.
++ (BOOL)isDreamcastROMAtURL:(NSURL *)url NS_SWIFT_NAME(isDreamcastROM(at:));
+/// Dreamcast BIOS directory (dc_boot.bin / dc_flash.bin). hle YES keeps Flycast's HLE BIOS.
+- (void)setDreamcastSystemDirectory:(NSString *)path useHLEBIOS:(BOOL)hle;
 /// 0 if the file is not a Game Boy cartridge, 2 for Game Boy, 3 for Game Boy Color
 /// (CGB flag in the header, or the .gbc extension). Any thread.
 + (NSInteger)gameBoySystemOfROMAtURL:(NSURL *)url NS_SWIFT_NAME(gameBoySystem(ofROMAt:));

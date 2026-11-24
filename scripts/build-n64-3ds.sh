@@ -506,6 +506,15 @@ build_ios_all() {
 }
 
 # ---------- entry ----------
+# CI app builds set this so they link without compiling Mupen and Azahar.
+# Default (unset) is unchanged: a real core build is still attempted.
+if [[ "${TWINPLAY_N64_3DS_STUB:-}" == 1 ]]; then
+    echo "TWINPLAY_N64_3DS_STUB=1: writing N64 and 3DS stubs."
+    stub_lib twinplay_n64 "$ROOT/Core/n64/twinplay_n64_stub.c"
+    stub_lib twinplay_3ds "$ROOT/Core/n3ds/twinplay_3ds_stub.c"
+    exit 0
+fi
+
 if [[ -n "${SDKROOT:-}" && "${SDKROOT}" == *iPhone* ]]; then
     set +e
     ( set -euo pipefail; build_ios_all )

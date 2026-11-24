@@ -1,0 +1,4 @@
+# Flycast (GPL-2.0-or-later). No ROMs, BIOS or games.
+# https://github.com/flyinghead/flycast
+FLYCAST_URL=https://github.com/flyinghead/flycast.git
+FLYCAST_COMMIT=105342d53fc181493cd372c8f1ebf5c49621ed1a

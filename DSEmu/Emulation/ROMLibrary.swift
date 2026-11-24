@@ -96,7 +96,11 @@ final class ROMLibrary: ObservableObject {
     static let snesType = UTType(importedAs: "com.charlie.dsemu.snes-rom", conformingTo: .data)
     static let n64Type = UTType(importedAs: "com.charlie.dsemu.n64-rom", conformingTo: .data)
     static let n3dsType = UTType(importedAs: "com.charlie.dsemu.3ds-rom", conformingTo: .data)
-    static let romExtensions: Set<String> = ["nds", "gba", "gb", "gbc", "nes", "sfc", "smc", "n64", "z64", "v64", "3ds", "cci", "cxi"]
+    static let dreamcastType = UTType(importedAs: "com.charlie.dsemu.dreamcast-disc", conformingTo: .data)
+    /// .bin is a Dreamcast track beside a .gdi/.cue, not a library entry (a loose .bin can be an NES image).
+    static let romExtensions: Set<String> = ["nds", "gba", "gb", "gbc", "nes", "sfc", "smc", "n64", "z64", "v64", "3ds", "cci", "cxi", "cdi", "gdi", "chd", "cue", "zip"]
+    static let dreamcastDiscExtensions: Set<String> = ["cdi", "gdi", "chd", "cue", "zip"]
+    static let trackExtensions: Set<String> = ["bin", "raw", "iso", "wav"]
     static let ndsType = UTType(importedAs: "com.charlie.dsemu.nds-rom", conformingTo: .data)
 
     @Published private(set) var entries: [Entry] = []
@@ -140,8 +144,7 @@ final class ROMLibrary: ObservableObject {
     }
 
     func refresh() {
-        let files = (try? FileManager.default.contentsOfDirectory(at: romsDirectory, includingPropertiesForKeys: [.creationDateKey])) ?? []
-        let roms = files.filter { Self.romExtensions.contains($0.pathExtension.lowercased()) }
+        let roms = libraryROMFiles()
         var changed = false
         entries = roms.map { url in
             let key = url.lastPathComponent
@@ -186,6 +189,7 @@ final class ROMLibrary: ObservableObject {
         case "sfc", "smc": return .snes
         case "n64", "z64", "v64": return .n64
         case "3ds", "cci", "cxi": return .n3ds
+        case "cdi", "gdi", "chd", "cue", "zip": return .dreamcast
         case "gb", "gbc", "sgb":
             switch headerSystem {
             case 3: return .gbc
@@ -194,6 +198,7 @@ final class ROMLibrary: ObservableObject {
             }
         default:
             switch headerSystem {
+            case 8: return .dreamcast
             case 7: return .n3ds
             case 6: return .n64
             case 5: return .snes
@@ -252,13 +257,92 @@ final class ROMLibrary: ObservableObject {
         }
     }
 
+    /// Top-level games, plus one folder level so a .gdi/.cue can sit with its tracks.
+    private func libraryROMFiles() -> [URL] {
+        let fm = FileManager.default
+        let top = (try? fm.contentsOfDirectory(at: romsDirectory, includingPropertiesForKeys: [.isDirectoryKey, .creationDateKey])) ?? []
+        var roms: [URL] = []
+        for url in top {
+            let dir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+            if dir {
+                let inner = (try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: [.creationDateKey])) ?? []
+                roms.append(contentsOf: inner.filter { Self.romExtensions.contains($0.pathExtension.lowercased()) })
+            } else if Self.romExtensions.contains(url.pathExtension.lowercased()) {
+                roms.append(url)
+            }
+        }
+        return roms
+    }
+
+    /// Copies a .gdi or .cue and the track files named inside it (and any companions the user picked).
+    @discardableResult
+    func importDiscSet(_ source: URL, companions: [URL] = []) throws -> String {
+        let ext = source.pathExtension.lowercased()
+        let base = source.deletingPathExtension().lastPathComponent
+        let dir = romsDirectory.appendingPathComponent(base, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dest = dir.appendingPathComponent(source.lastPathComponent)
+        if FileManager.default.fileExists(atPath: dest.path) { try FileManager.default.removeItem(at: dest) }
+        try FileManager.default.copyItem(at: source, to: dest)
+        let text = (try? String(contentsOf: source, encoding: .utf8)) ?? (try? String(contentsOf: source, encoding: .isoLatin1)) ?? ""
+        var names = Self.trackNames(in: text)
+        let parent = source.deletingLastPathComponent()
+        for extra in companions where extra.deletingLastPathComponent() == parent && Self.trackExtensions.contains(extra.pathExtension.lowercased()) {
+            names.append(extra.lastPathComponent)
+        }
+        var seen = Set<String>()
+        for name in names where seen.insert(name).inserted {
+            let src = parent.appendingPathComponent(name)
+            guard FileManager.default.fileExists(atPath: src.path) else { continue }
+            let dst = dir.appendingPathComponent((name as NSString).lastPathComponent)
+            if FileManager.default.fileExists(atPath: dst.path) { try FileManager.default.removeItem(at: dst) }
+            try FileManager.default.copyItem(at: src, to: dst)
+        }
+        return dest.lastPathComponent
+    }
+
+    /// Filenames mentioned by a .gdi or .cue. Track data is never downloaded.
+    static func trackNames(in text: String) -> [String] {
+        var names: [String] = []
+        if let re = try? NSRegularExpression(pattern: #"FILE\s+"([^"]+)""#, options: [.caseInsensitive]) {
+            let ns = text as NSString
+            for m in re.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                names.append(ns.substring(with: m.range(at: 1)))
+            }
+        }
+        for line in text.split(whereSeparator: \.isNewline).dropFirst() {
+            for token in line.split(whereSeparator: \.isWhitespace) {
+                let t = token.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                if t.contains(".") { names.append(t) }
+            }
+        }
+        return names
+    }
+
     /// Copies files picked in the Files app into the library.
     func importFiles(_ urls: [URL]) {
         for source in urls {
             let scoped = source.startAccessingSecurityScopedResource()
             defer { if scoped { source.stopAccessingSecurityScopedResource() } }
-            guard Self.romExtensions.contains(source.pathExtension.lowercased()) else {
-                lastError = String(localized: "\(source.lastPathComponent) is not a .nds, .gba, .gb or .gbc file")
+            let ext = source.pathExtension.lowercased()
+            if Self.trackExtensions.contains(ext),
+               urls.contains(where: { ["gdi", "cue"].contains($0.pathExtension.lowercased()) && $0.deletingLastPathComponent() == source.deletingLastPathComponent() }) {
+                continue
+            }
+            guard Self.romExtensions.contains(ext) else {
+                lastError = String(localized: "\(source.lastPathComponent) is not a game TwinPlay can import")
+                continue
+            }
+            if ext == "gdi" || ext == "cue" {
+                do {
+                    let name = try importDiscSet(source, companions: urls)
+                    meta[name, default: Meta()].added = Date()
+                    bannerCache[name] = nil
+                    headerCache[name] = nil
+                    bannerTried.remove(name)
+                } catch {
+                    lastError = String(localized: "Could not import \(source.lastPathComponent): \(error.localizedDescription)")
+                }
                 continue
             }
             let destination = romsDirectory.appendingPathComponent(source.lastPathComponent)
@@ -474,8 +558,14 @@ extension ROMLibrary {
             var added: [String] = []
             for item in plan.imports {
                 do {
-                    try FileManager.default.copyItem(at: item.source, to: romsDir.appendingPathComponent(item.name))
-                    added.append(item.name)
+                    let ext = item.source.pathExtension.lowercased()
+                    if ext == "gdi" || ext == "cue" {
+                        let name = try self.importDiscSet(item.source)
+                        added.append(name)
+                    } else {
+                        try FileManager.default.copyItem(at: item.source, to: romsDir.appendingPathComponent(item.name))
+                        added.append(item.name)
+                    }
                 } catch { result.failed += 1 }
             }
             result.added = added.count

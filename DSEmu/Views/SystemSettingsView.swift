@@ -136,6 +136,13 @@ struct SystemSettingsView: View {
                                                  ? "Ready: real BIOS, firmware boot screen (experimental)" : "Ready: real BIOS, direct boot")
                                              : "Needs bios9.bin and bios7.bin; using built-in BIOS", ok: store.dsReady)
                 }
+                Section {
+                    row(.dcBoot); row(.dcFlash)
+                    statusLine(store.info[.dcBoot] != nil ? "Using your Dreamcast BIOS" : "Using Flycast's built-in BIOS. No file is required.",
+                               ok: true)
+                } header: { Text("Dreamcast") } footer: {
+                    Text("Optional. Leave this empty and Flycast's HLE BIOS is used. If you dumped your own console, import dc_boot.bin (2 MB) and dc_flash.bin (128 KB). TwinPlay never includes or downloads them.")
+                }
                 Section("Game Boy Advance") {
                     row(.gba)
                     statusLine(store.gbaReady ? "Ready: real BIOS with boot intro" : "Using built-in BIOS", ok: store.gbaReady)

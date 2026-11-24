@@ -73,6 +73,7 @@ final class BoxArtFinder {
         case .snes: return "Nintendo - Super Nintendo Entertainment System"
         case .n64: return "Nintendo - Nintendo 64"
         case .n3ds: return "Nintendo - Nintendo 3DS"
+        case .dreamcast: return "Sega - Dreamcast"
         }
     }
     private static func githubRepo(_ s: GameSystem) -> String {
@@ -85,6 +86,7 @@ final class BoxArtFinder {
         case .snes: return "Nintendo_-_Super_Nintendo_Entertainment_System"
         case .n64: return "Nintendo_-_Nintendo_64"
         case .n3ds: return "Nintendo_-_Nintendo_3DS"
+        case .dreamcast: return "Sega_-_Dreamcast"
         }
     }
     /// libretro replaces these characters with "_" in file names.

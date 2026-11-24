@@ -3,7 +3,9 @@
 A SwiftUI app (iOS 16+, iPhone and iPad). The DS, GBA, GB and GBC cores are original
 C++. NES and Super NES use [ares](https://github.com/ares-emulator/ares) (ISC). N64 uses
 Mupen64Plus (cached interpreter, no dynarec) with GLideN64 and the HLE RSP. 3DS uses
-Azahar's FastInterp (no JIT). **This tree is licensed under GPL-3.0-or-later** — see
+Azahar's FastInterp (no JIT). Dreamcast uses [Flycast](https://github.com/flyinghead/flycast)
+(GPL-2.0-or-later): the interpreter on iOS, so there is no JIT, and the dynarec on Mac.
+**This tree is licensed under GPL-3.0-or-later** — see
 `LICENSE`, `NOTICE.md` and `THIRD_PARTY_NOTICES.md`. **No ROMs, BIOS or Nintendo firmware
 are included.** Users supply their own dumps.
 

@@ -1,4 +1,4 @@
-# Third-party notices — N64 and 3DS
+# Third-party notices — N64, 3DS and Dreamcast
 
 TwinPlay as a whole is licensed under GPL-3.0-or-later (see `LICENSE` and `NOTICE.md`).
 TwinPlay's own DS, GBA, GB and GBC cores, the SwiftUI app and the bridge are original work
@@ -16,6 +16,7 @@ N64 and 3DS are different. They are existing GPL emulators, pinned in
 | TwinPlay N64 frontend (`Core/n64/twinplay_n64.cpp`, `vidext_egl.cpp`) | this repo | GPL-2.0-or-later | Front-end that links the pieces above. |
 | Azahar | `6b4e7f2e694514fdf2f72dc20368609b7cd4912e` (tag `2127.0-rc2`) | GPL-3.0-or-later (file headers such as `src/core/core.cpp`); `LICENSE.txt` is the GPL-3 text | 3DS core. Intended CPU is FastInterp, not dynarmic. Built by `scripts/build-n64-3ds.sh` as `libtwinplay_3ds.a` (FastInterp, no dynarmic/JIT) and linked in the 1.4 app. |
 | MoltenVK | v1.4.1 (KhronosGroup release `MoltenVK-all.tar`; static `MoltenVK.xcframework` ios-arm64 / ios-arm64_x86_64-simulator) | Apache License 2.0 (`Core/third_party/MoltenVK/LICENSE`) | Vulkan-on-Metal driver for the 3DS Azahar renderer. Statically linked. Not a Nintendo BIOS, key, or ROM. |
+| Flycast | `105342d53fc181493cd372c8f1ebf5c49621ed1a` | GPL-2.0-or-later (source headers: "either version 2 of the License, or any later version"; the repo `LICENSE` file is the GPL-2 text) | Dreamcast core, libretro build. Fetched by `scripts/fetch-flycast.sh`, not committed. iOS is built with `-DTARGET_NO_REC` (interpreter only, no dynarec). macOS keeps the dynarec. |
 
 Full licence texts ship inside each upstream tree (`LICENSES`, `LICENSE`, `LICENSE.txt`).
 They are not copied into the app bundle by this change.

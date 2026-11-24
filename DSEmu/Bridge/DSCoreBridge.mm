@@ -154,12 +154,15 @@ void exceptionHandler(NSException* e) {
                                    : kind == DSCoreKindSNES ? dscore::CoreKind::SNES
                                    : kind == DSCoreKindN64 ? dscore::CoreKind::N64
                                    : kind == DSCoreKindN3DS ? dscore::CoreKind::N3DS
+                                   : kind == DSCoreKindDreamcast ? dscore::CoreKind::Dreamcast
                                                            : dscore::CoreKind::Interpreter);
         /* Load signed N64 dylibs from Frameworks only. resourcePath/plugins is
            the same as PlugIns on case-insensitive APFS, and iOS will SIGKILL
            CODESIGNING if GLideN64 calls back into a dylib sitting there. */
-        if (NSString *fw = NSBundle.mainBundle.privateFrameworksPath) {
-            _core->setDataPath(fw.UTF8String ?: "");
+        if (kind != DSCoreKindDreamcast) {
+            if (NSString *fw = NSBundle.mainBundle.privateFrameworksPath) {
+                _core->setDataPath(fw.UTF8String ?: "");
+            }
         }
         _frames[0].assign(dscore::kScreenPixels * 2, 0xFF000000u);
         _frames[1].assign(dscore::kScreenPixels * 2, 0xFF000000u);
@@ -208,6 +211,11 @@ static std::vector<uint8_t> twinBytes(NSData *d) {
     if (d.length == 0) return {};
     const uint8_t *p = static_cast<const uint8_t *>(d.bytes);
     return std::vector<uint8_t>(p, p + d.length);
+}
+
+- (void)setDreamcastSystemDirectory:(NSString *)path useHLEBIOS:(BOOL)hle {
+    if (path.length) _core->setDataPath(path.UTF8String);
+    _core->setLLEBIOS(hle ? std::vector<uint8_t>() : std::vector<uint8_t>(1, 1), {}, {}, false);
 }
 
 - (BOOL)setLLEBIOS9:(NSData *)bios9 bios7:(NSData *)bios7 firmware:(NSData *)firmware bootFirmware:(BOOL)bootFirmware {
@@ -489,7 +497,8 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
     if ([ext isEqualToString:@"nds"] || [ext isEqualToString:@"gba"] || [ext isEqualToString:@"gb"]
         || [ext isEqualToString:@"gbc"] || [ext isEqualToString:@"sfc"] || [ext isEqualToString:@"smc"]
         || [ext isEqualToString:@"n64"] || [ext isEqualToString:@"z64"] || [ext isEqualToString:@"v64"]
-        || [ext isEqualToString:@"3ds"] || [ext isEqualToString:@"cci"] || [ext isEqualToString:@"cxi"]) return NO;
+        || [ext isEqualToString:@"3ds"] || [ext isEqualToString:@"cci"] || [ext isEqualToString:@"cxi"]
+        || [self isDreamcastROMAtURL:url]) return NO;
     NSFileHandle *fh = [NSFileHandle fileHandleForReadingFromURL:url error:nil];
     NSData *h = [fh readDataOfLength:16];
     [fh closeFile];
@@ -502,7 +511,8 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
     if ([ext isEqualToString:@"nds"] || [ext isEqualToString:@"gba"] || [ext isEqualToString:@"nes"]
         || [ext isEqualToString:@"gb"] || [ext isEqualToString:@"gbc"]
         || [ext isEqualToString:@"n64"] || [ext isEqualToString:@"z64"] || [ext isEqualToString:@"v64"]
-        || [ext isEqualToString:@"3ds"] || [ext isEqualToString:@"cci"] || [ext isEqualToString:@"cxi"]) return NO;
+        || [ext isEqualToString:@"3ds"] || [ext isEqualToString:@"cci"] || [ext isEqualToString:@"cxi"]
+        || [self isDreamcastROMAtURL:url]) return NO;
     NSFileHandle *fh = [NSFileHandle fileHandleForReadingFromURL:url error:nil];
     NSData *h = [fh readDataOfLength:0x10040];
     [fh closeFile];
@@ -516,11 +526,17 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
     if ([ext isEqualToString:@"nds"] || [ext isEqualToString:@"gba"] || [ext isEqualToString:@"nes"]
         || [ext isEqualToString:@"sfc"] || [ext isEqualToString:@"smc"] || [ext isEqualToString:@"gb"]
         || [ext isEqualToString:@"gbc"] || [ext isEqualToString:@"3ds"] || [ext isEqualToString:@"cci"]
-        || [ext isEqualToString:@"cxi"]) return NO;
+        || [ext isEqualToString:@"cxi"] || [self isDreamcastROMAtURL:url]) return NO;
     NSFileHandle *fh = [NSFileHandle fileHandleForReadingFromURL:url error:nil];
     NSData *h = [fh readDataOfLength:4];
     [fh closeFile];
     return dscore::isN64Image(static_cast<const uint8_t *>(h.bytes), h.length);
+}
+
++ (BOOL)isDreamcastROMAtURL:(NSURL *)url {
+    NSString *ext = url.pathExtension.lowercaseString;
+    return [ext isEqualToString:@"cdi"] || [ext isEqualToString:@"gdi"] || [ext isEqualToString:@"chd"]
+        || [ext isEqualToString:@"cue"] || [ext isEqualToString:@"zip"];
 }
 
 + (BOOL)is3DSROMAtURL:(NSURL *)url {
@@ -528,7 +544,7 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
     if ([ext isEqualToString:@"3ds"] || [ext isEqualToString:@"cci"] || [ext isEqualToString:@"cxi"]) return YES;
     if ([ext isEqualToString:@"nds"] || [ext isEqualToString:@"gba"] || [ext isEqualToString:@"nes"]
         || [ext isEqualToString:@"sfc"] || [ext isEqualToString:@"smc"] || [ext isEqualToString:@"n64"]
-        || [ext isEqualToString:@"z64"] || [ext isEqualToString:@"v64"]) return NO;
+        || [ext isEqualToString:@"z64"] || [ext isEqualToString:@"v64"] || [self isDreamcastROMAtURL:url]) return NO;
     NSFileHandle *fh = [NSFileHandle fileHandleForReadingFromURL:url error:nil];
     NSData *h = [fh readDataOfLength:0x110];
     [fh closeFile];
@@ -591,6 +607,11 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
         info.title = @""; info.gameCode = @"3DS";
         return info;
     }
+    if ([self isDreamcastROMAtURL:url]) {
+        info.system = 8; info.isGBA = NO;
+        info.title = @""; info.gameCode = @"DC";
+        return info;
+    }
     if ([self isNESROMAtURL:url]) {
         info.system = 4; info.isGBA = NO;
         info.title = @""; info.gameCode = @"";
@@ -634,7 +655,8 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
 
 + (nullable DSROMBanner *)bannerForROMAtURL:(NSURL *)url {
     if ([self isGBAROMAtURL:url] || [self isNESROMAtURL:url] || [self isSNESROMAtURL:url]
-        || [self isN64ROMAtURL:url] || [self is3DSROMAtURL:url] || [self gameBoySystemOfROMAtURL:url] != 0) {
+        || [self isN64ROMAtURL:url] || [self is3DSROMAtURL:url] || [self isDreamcastROMAtURL:url]
+        || [self gameBoySystemOfROMAtURL:url] != 0) {
         DSROMHeaderInfo *info = [self headerInfoForROMAtURL:url];
         if (!info || info.title.length == 0) return nil;
         DSROMBanner *b = [[DSROMBanner alloc] init];

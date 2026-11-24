@@ -149,7 +149,7 @@ struct LibraryView: View {
         .debugForceLandscape()
         .overlay { if isClassic { libraryDialog } }
         .fileImporter(isPresented: Binding(get: { importer != nil }, set: { if !$0 { importer = nil } }),
-                      allowedContentTypes: importer == .cover ? [.image] : importer == .folder ? [.folder] : [ROMLibrary.ndsType, ROMLibrary.gbaType, ROMLibrary.gbType, ROMLibrary.gbcType, ROMLibrary.nesType, ROMLibrary.snesType, ROMLibrary.n64Type, ROMLibrary.n3dsType, .data],
+                      allowedContentTypes: importer == .cover ? [.image] : importer == .folder ? [.folder] : [ROMLibrary.ndsType, ROMLibrary.gbaType, ROMLibrary.gbType, ROMLibrary.gbcType, ROMLibrary.nesType, ROMLibrary.snesType, ROMLibrary.n64Type, ROMLibrary.n3dsType, ROMLibrary.dreamcastType, .data],
                       allowsMultipleSelection: importer == .games) { result in
             if importer == .folder {
                 importer = nil
@@ -447,7 +447,7 @@ struct LibraryView: View {
                     }
 
                     if library.entries.isEmpty {
-                        Text("Add your own .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci or .cxi games with the + button: pick files, or a whole folder (subfolders included).")
+                        Text("Add your own games with the + button: .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci, .cxi, or Dreamcast .cdi, .gdi (with its tracks), .chd, .cue or .zip. Pick files, or a whole folder.")
                             .foregroundStyle(.secondary)
                         ExperimentalNotice(onReport: nil).frame(maxWidth: .infinity)
                     }
@@ -474,15 +474,22 @@ struct LibraryView: View {
                         // "All": one section per system.
                         ForEach(GameSystem.allCases) { sys in
                             let list = library.sorted(sort, search: search, system: sys)
-                            if !list.isEmpty {
+                            if !list.isEmpty || (sys == .dreamcast && DreamcastNotice.showOnThisDevice) {
                                 Text(sys.longName).font(.title3.weight(.bold))
-                                grid(list)
+                                if sys == .dreamcast { DreamcastDevicesNote() }
+                                if list.isEmpty {
+                                    Text("No Dreamcast games yet. Use Add Games for .cdi, .gdi (and its tracks), .chd, .cue or .zip.")
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    grid(list)
+                                }
                             }
                         }
                         if !library.entries.isEmpty && library.sorted(sort, search: search).isEmpty {
                             Text("No games match “\(search)”.").foregroundStyle(.secondary)
                         }
                     } else {
+                        if filterSystem == .dreamcast { DreamcastDevicesNote().padding(.bottom, 4) }
                         let list = library.sorted(sort, search: search, system: filterSystem)
                         if !library.entries.isEmpty && list.isEmpty {
                             Text(search.isEmpty ? String(localized: "No \(filterSystem?.label ?? "") games yet.") : String(localized: "No games match “\(search)”."))

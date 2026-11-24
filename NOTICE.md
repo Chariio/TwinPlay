@@ -18,10 +18,11 @@ protocol, and the Super Famicom board list is ares's own database.
   math from public command lists (SNESdev wiki DSP-1, nocash Fullsnes). They are not
   firmware, not Snes9x, and not the Cx4 program ROM. That program ROM is copyrighted
   microcode and is not included, so Mega Man X2/X3 chip effects are unfinished.
-- N64 and 3DS are the exception, and they are GPL. See `THIRD_PARTY_NOTICES.md` and
-  `docs/N64_3DS.md`. Mupen64Plus (cached interpreter only; the dynarec is not compiled),
-  mupen64plus-rsp-hle and GLideN64 are GPL-2.0-or-later. Azahar 2127.0-rc2 is GPL-3.0-or-later
-  and is fetched but not linked until its no-JIT build is finished. Because those libraries are linked in the 1.4 app, TwinPlay as a whole is offered under GPL-3.0-or-later (`LICENSE`). No other GPL or LGPL code is included.
+- N64, 3DS and Dreamcast are the exception, and they are GPL. See `THIRD_PARTY_NOTICES.md`,
+  `docs/N64_3DS.md` and `docs/DREAMCAST.md`. Mupen64Plus (cached interpreter only; the dynarec is not compiled),
+  mupen64plus-rsp-hle and GLideN64 are GPL-2.0-or-later. Azahar 2127.0-rc2 is GPL-3.0-or-later.
+  Flycast is GPL-2.0-or-later (the upstream headers say "version 2 or any later version").
+  Because those libraries are linked in the app, TwinPlay as a whole is offered under GPL-3.0-or-later (`LICENSE`).
   NES and Super NES remain ares (ISC).
 - No Nintendo ROMs, BIOS images, firmware, key tables, graphics or sounds.
   (The KEY1 algorithm is implemented from its public description; its key table is only read

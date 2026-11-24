@@ -27,6 +27,7 @@ OBJDIR := build/objs
 CORE_OBJS := $(patsubst src/%.cpp,$(OBJDIR)/%.o,$(SRC))
 ARES_OBJS := $(patsubst %.cpp,$(OBJDIR)/%.o,$(notdir $(ARES_SRC)))
 LIBCO := $(OBJDIR)/libco.o
+DC_STUB := $(OBJDIR)/dc_stub.o
 LDFLAGS := -lpthread -ldl
 ifeq ($(shell uname -s),Darwin)
   # nall::Path calls CFBundle* / CFURL* / CFRelease.
@@ -41,17 +42,17 @@ test: build/core_tests build/nes_snes_tests build/n64_3ds_tests
 # The binary lives in build/. `make snes_race_harness` builds it.
 snes_race_harness: build/snes_race_harness
 
-build/core_tests: $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/core_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o
-	$(CXX) -g -o $@ $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/core_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(LDFLAGS)
+build/core_tests: $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/core_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(DC_STUB)
+	$(CXX) -g -o $@ $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/core_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(DC_STUB) $(LDFLAGS)
 
-build/nes_snes_tests: $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/nes_snes_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o
-	$(CXX) -g -o $@ $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/nes_snes_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(LDFLAGS)
+build/nes_snes_tests: $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/nes_snes_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(DC_STUB)
+	$(CXX) -g -o $@ $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/nes_snes_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(DC_STUB) $(LDFLAGS)
 
-build/n64_3ds_tests: $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/n64_3ds_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o
-	$(CXX) -g -o $@ $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/n64_3ds_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(LDFLAGS)
+build/n64_3ds_tests: $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/n64_3ds_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(DC_STUB)
+	$(CXX) -g -o $@ $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/n64_3ds_tests.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(DC_STUB) $(LDFLAGS)
 
-build/snes_race_harness: $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/snes_race_harness.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o
-	$(CXX) -g -o $@ $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/snes_race_harness.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(LDFLAGS)
+build/snes_race_harness: $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/snes_race_harness.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(DC_STUB)
+	$(CXX) -g -o $@ $(CORE_OBJS) $(ARES_OBJS) $(LIBCO) $(OBJDIR)/snes_race_harness.o $(OBJDIR)/n64_stub.o $(OBJDIR)/n3ds_stub.o $(DC_STUB) $(LDFLAGS)
 
 $(OBJDIR)/core_tests.o: tests/core_tests.cpp
 	@mkdir -p $(OBJDIR)
@@ -72,6 +73,10 @@ $(OBJDIR)/n64_stub.o: n64/twinplay_n64_stub.c
 $(OBJDIR)/n3ds_stub.o: n3ds/twinplay_3ds_stub.c
 	@mkdir -p $(OBJDIR)
 	$(CC) -std=c11 -O2 -g -c $< -o $@
+
+$(OBJDIR)/dc_stub.o: dreamcast/twinplay_flycast_stub.c dreamcast/twinplay_flycast.h
+	@mkdir -p $(OBJDIR)
+	$(CC) -std=c11 -O2 -g -Idreamcast -c $< -o $@
 
 $(OBJDIR)/snes_race_harness.o: tests/snes_race_harness.cpp
 	@mkdir -p $(OBJDIR)

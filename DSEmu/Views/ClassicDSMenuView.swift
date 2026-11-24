@@ -8,7 +8,7 @@ import SwiftUI
 /// On an open iPhone Duo the two halves sit on either side of the hinge; on a regular iPhone or a
 /// closed Duo they are stacked in one compact column. All artwork is original TwinPlay styling.
 struct ClassicDSMenuView: View {
-    enum Folder: String, CaseIterable { case all, ds, gba, gb, gbc, nes, snes, n64, n3ds, favorites
+    enum Folder: String, CaseIterable { case all, ds, gba, gb, gbc, nes, snes, n64, n3ds, dreamcast, favorites
         /// The system a folder holds (nil: All / Favorites hold every system).
         var system: GameSystem? {
             switch self {
@@ -20,6 +20,7 @@ struct ClassicDSMenuView: View {
             case .snes: return .snes
             case .n64: return .n64
             case .n3ds: return .n3ds
+            case .dreamcast: return .dreamcast
             default: return nil
             }
         }
@@ -44,6 +45,7 @@ struct ClassicDSMenuView: View {
             case .snes: return "Super NES"
             case .n64: return "N64"
             case .n3ds: return "3DS"
+            case .dreamcast: return "Dreamcast"
             case .favorites: return "Favorites"
             }
         }
@@ -58,6 +60,7 @@ struct ClassicDSMenuView: View {
             case .snes: return "rectangle.inset.filled"
             case .n64: return "gamecontroller"
             case .n3ds: return "rectangle.split.2x1"
+            case .dreamcast: return "opticaldisc"
             case .favorites: return "star.fill"
             }
         }
@@ -201,7 +204,7 @@ struct ClassicDSMenuView: View {
                     Spacer()
                 } else {
                     Spacer()
-                    Text((folder == .favorites ? "No favorites yet.\nPress Fav on a game to add it." : "No games here yet.\nImport your own .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci or .cxi files.").loc)
+                    Text((folder == .favorites ? "No favorites yet.\nPress Fav on a game to add it." : folder == .dreamcast ? "No Dreamcast games yet.\nAdd a .cdi, .gdi (with its tracks), .chd, .cue or .zip." : "No games here yet.\nImport your own .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci or .cxi files.").loc)
                         .multilineTextAlignment(.center).font(.system(.callout, design: .rounded)).foregroundStyle(ClassicPalette.dim)
                     Spacer()
                 }
@@ -220,8 +223,13 @@ struct ClassicDSMenuView: View {
                 HStack(spacing: 6) {
                     Button { cycleFolder(-1) } label: { Image(systemName: "chevron.left") }
                     Image(systemName: folder.icon).font(.caption)
-                    Text(grid.folderTitle.map { "\(folder.title) \u{203A} \($0)" } ?? folder.title)
-                        .font(.system(.subheadline, design: .rounded).weight(.semibold)).lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(grid.folderTitle.map { "\(folder.title) \u{203A} \($0)" } ?? folder.title)
+                            .font(.system(.subheadline, design: .rounded).weight(.semibold)).lineLimit(1)
+                        if folder == .dreamcast && DreamcastNotice.showOnThisDevice {
+                            Text(DreamcastNotice.text).font(.system(size: 10, design: .rounded)).foregroundStyle(ClassicPalette.dim).lineLimit(3)
+                        }
+                    }
                     Spacer()
                     Button { cycleFolder(1) } label: { Image(systemName: "chevron.right") }
                 }

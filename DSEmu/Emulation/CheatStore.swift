@@ -19,6 +19,7 @@ enum CheatStore {
         case .snes: return "snes"
         case .n64: return "n64"
         case .n3ds: return "n3ds"
+        case .dreamcast: return "dreamcast"
         case .gb, .gbc: return "gb"
         }
     }
@@ -41,7 +42,7 @@ enum CheatStore {
         case .ds: return String(localized: "Action Replay DS: lines of XXXXXXXX YYYYYYYY.")
         case .gba: return String(localized: "GameShark v1/v2 raw (XXXXXXXX YYYYYYYY) or CodeBreaker raw (XXXXXXXX YYYY). Encrypted codes aren't supported.")
         case .gb, .gbc: return String(localized: "GameShark (01VVAAAA) or Game Genie (ABC-DEF or ABC-DEF-GHI).")
-        case .nes, .snes, .n64, .n3ds: return String(localized: "Cheats aren't available for this system yet.")
+        case .nes, .snes, .n64, .n3ds, .dreamcast: return String(localized: "Cheats aren't available for this system yet.")
         }
     }
 }
