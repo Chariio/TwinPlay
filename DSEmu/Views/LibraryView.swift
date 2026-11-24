@@ -515,12 +515,16 @@ struct LibraryView: View {
     }
 
     @ToolbarContentBuilder private var libraryToolbar: some ToolbarContent {
+        // .largeTitle placement exists in the iOS 26 SDK. Xcode 16.4 type-checks the
+        // availability branch and rejects the member.
+        #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             ToolbarItem(placement: .largeTitle) {
                 Text("TwinPlay").font(.largeTitle.bold()).frame(maxWidth: .infinity, alignment: .leading)
                     .foregroundStyle(backgroundID == "none" ? Color.primary : Color.white)
             }
         }
+        #endif
         ToolbarItem(placement: .navigationBarLeading) {
             Menu { libraryMenuItems } label: { Image(systemName: "line.3.horizontal") }
                 .accessibilityLabel("Library menu")
