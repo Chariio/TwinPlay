@@ -18,11 +18,13 @@ protocol, and the Super Famicom board list is ares's own database.
   math from public command lists (SNESdev wiki DSP-1, nocash Fullsnes). They are not
   firmware, not Snes9x, and not the Cx4 program ROM. That program ROM is copyrighted
   microcode and is not included, so Mega Man X2/X3 chip effects are unfinished.
-- N64 and 3DS are the exception, and they are GPL. See `THIRD_PARTY_NOTICES.md` and
-  `docs/N64_3DS.md`. Mupen64Plus (cached interpreter only; the dynarec is not compiled),
-  mupen64plus-rsp-hle and GLideN64 are GPL-2.0-or-later. Azahar 2127.0-rc2 is GPL-3.0-or-later
-  and is fetched but not linked until its no-JIT build is finished. Because those libraries are linked in the 1.4 app, TwinPlay as a whole is offered under GPL-3.0-or-later (`LICENSE`). No other GPL or LGPL code is included.
-  NES and Super NES remain ares (ISC).
+- N64 and 3DS are GPL. See `THIRD_PARTY_NOTICES.md` and `docs/N64_3DS.md`. Mupen64Plus
+  (cached interpreter only; the dynarec is not compiled), mupen64plus-rsp-hle and GLideN64 are
+  GPL-2.0-or-later. Azahar 2127.0-rc2 is GPL-3.0-or-later. Because those libraries are linked,
+  TwinPlay as a whole is offered under GPL-3.0-or-later (`LICENSE`). NES and Super NES remain ares (ISC).
+- GameCube uses Dolphin (https://github.com/dolphin-emu/dolphin, GPL-2.0-or-later). The pin,
+  the fetch, and what is and is not linked are in `docs/GAMECUBE.md` and `THIRD_PARTY_NOTICES.md`.
+  No GameCube IPL, DSP ROM, or game is included.
 - No Nintendo ROMs, BIOS images, firmware, key tables, graphics or sounds.
   (The KEY1 algorithm is implemented from its public description; its key table is only read
   from a BIOS file the user supplies themselves, if they choose to.)

@@ -149,7 +149,7 @@ struct LibraryView: View {
         .debugForceLandscape()
         .overlay { if isClassic { libraryDialog } }
         .fileImporter(isPresented: Binding(get: { importer != nil }, set: { if !$0 { importer = nil } }),
-                      allowedContentTypes: importer == .cover ? [.image] : importer == .folder ? [.folder] : [ROMLibrary.ndsType, ROMLibrary.gbaType, ROMLibrary.gbType, ROMLibrary.gbcType, ROMLibrary.nesType, ROMLibrary.snesType, ROMLibrary.n64Type, ROMLibrary.n3dsType, .data],
+                      allowedContentTypes: importer == .cover ? [.image] : importer == .folder ? [.folder] : [ROMLibrary.ndsType, ROMLibrary.gbaType, ROMLibrary.gbType, ROMLibrary.gbcType, ROMLibrary.nesType, ROMLibrary.snesType, ROMLibrary.n64Type, ROMLibrary.n3dsType, ROMLibrary.gcType, .zip, .data],
                       allowsMultipleSelection: importer == .games) { result in
             if importer == .folder {
                 importer = nil
@@ -215,7 +215,7 @@ struct LibraryView: View {
             Button("Choose Folder…") { coverTarget = nil; importer = .folder }
             Button("Not Now", role: .cancel) {}
         } message: {
-            Text("Pick the folder where you keep your .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci and .cxi files, for example On My iPhone › Downloads. TwinPlay imports every game in it and its subfolders and skips ones you already have. Use “Find new games” later to pick up new ones.")
+            Text("Pick the folder where you keep your .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci, .cxi, .iso, .gcm, .rvz, .ciso, .gcz and .zip files, for example On My iPhone › Downloads. TwinPlay imports every game in it and its subfolders and skips ones you already have. Use “Find new games” later to pick up new ones.")
         }
         .task {
             let autoOpening = UserDefaults.standard.string(forKey: "TwinPlayAutoOpen") != nil
@@ -315,7 +315,9 @@ struct LibraryView: View {
 
     /// Classic DS Menu library style (two screens split at the hinge on an open iPhone Duo).
     private var classicBody: some View {
-        ClassicDSMenuView(entries: classicEntries, folder: classicFolder, focus: $classicFocus, posture: effectivePosture,
+        VStack(spacing: 0) {
+            if classicFolder.wrappedValue == .gamecube { GameCubeNoticeBanner().padding(.horizontal).padding(.top, 6) }
+            ClassicDSMenuView(entries: classicEntries, folder: classicFolder, focus: $classicFocus, posture: effectivePosture,
                           hingeKnown: hingeAngle != nil,
                           onPlay: { open(rom: $0.url) },
                           onFavorite: { library.toggleFavorite($0) },
@@ -337,6 +339,8 @@ struct LibraryView: View {
                           }),
                           onMenu: { showSettings = true },
                           controllerEnabled: session == nil && padMenuEntry == nil && renaming == nil && deleting == nil)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 
     /// The library's main menu (top-left in Standard, the ⋯ button in Classic), in sections:
@@ -439,6 +443,7 @@ struct LibraryView: View {
                         }
                         .padding(.horizontal, 2)
                     }
+                    if filterSystem == .gamecube { GameCubeNoticeBanner() }
 
                     if findingAll {
                         HStack(spacing: 8) { ProgressView(); Text(findAllProgress).font(.footnote.weight(.semibold)) }
@@ -447,7 +452,7 @@ struct LibraryView: View {
                     }
 
                     if library.entries.isEmpty {
-                        Text("Add your own .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci or .cxi games with the + button: pick files, or a whole folder (subfolders included).")
+                        Text("Add your own .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci, .cxi, .iso, .gcm, .rvz, .ciso, .gcz or .zip games with the + button: pick files, or a whole folder (subfolders included).")
                             .foregroundStyle(.secondary)
                         ExperimentalNotice(onReport: nil).frame(maxWidth: .infinity)
                     }
@@ -476,6 +481,7 @@ struct LibraryView: View {
                             let list = library.sorted(sort, search: search, system: sys)
                             if !list.isEmpty {
                                 Text(sys.longName).font(.title3.weight(.bold))
+                                if sys == .gamecube { GameCubeNoticeBanner() }
                                 grid(list)
                             }
                         }

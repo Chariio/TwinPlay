@@ -50,3 +50,18 @@ cannot cover that binary.
    ROMs, BIOS, firmware, or keys. Users supply their own images.
 
 `NDUO_TESTER_UNLOCK` is not defined in the Xcode project. Do not turn it on for a Release build.
+
+## GameCube — Dolphin
+
+GameCube is Dolphin, pinned in `Core/third_party/dolphin-pin.txt` and fetched by
+`scripts/build-dolphin.sh`. The tree is not committed. No game, IPL, or DSP ROM is fetched.
+
+| Component | Commit | Licence | Role |
+|---|---|---|---|
+| Dolphin | `0318069674bbd7971f0db434fe1f7bd9f1c5750e` | GPL-2.0-or-later (source SPDX headers; upstream `COPYING` is the GPL-2 text) | GameCube CPU, DSP HLE, disc formats, Metal and Vulkan video. |
+| TwinPlay GameCube host (`Core/gamecube/twinplay_gc_host.cpp`) | this repo | GPL-2.0-or-later | Calls Dolphin. Compiled only by `scripts/build-dolphin.sh`, not by the default Xcode target. |
+| TwinPlay GameCube stub and session (`twinplay_gc_stub.cpp`, `Core/src/GameCubeCore.cpp`) | this repo | GPL-3.0-or-later | Library-facing core. The stub is what the app links until the host is built. |
+
+Mac builds Dolphin with the ARM64 JIT (`_M_ARM_64`), Metal, and Vulkan through Dolphin's bundled MoltenVK. iOS builds pass `-DENABLE_GENERIC=ON`, which defines `_M_GENERIC` and does not compile `JitArm64`. The iOS CPU is the cached interpreter. `-fno-fast-math` is required on that path. Neither build is signed (`CODE_SIGNING_ALLOWED=NO`, `-DMACOS_CODE_SIGNING=OFF`) and nothing is uploaded.
+
+Dolphin is GPL-2.0-or-later, so it can be combined with this GPL-3.0 tree. Confirm no vendored Dolphin file is GPL-2.0-only before an App Store binary. The same App Store / GPL-3 notes in the N64 section apply. The iOS binary must be the generic build, not the Mac JIT build.

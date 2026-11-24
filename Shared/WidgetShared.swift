@@ -58,6 +58,9 @@ struct WidgetGame: Codable, Hashable, Identifiable {
         case "gbc": return "GBC"
         case "nes": return "NES"
         case "snes": return "SNES"
+        case "n64": return "N64"
+        case "n3ds": return "3DS"
+        case "gamecube": return "GameCube"
         default: return "DS"
         }
     }

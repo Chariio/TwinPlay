@@ -18,6 +18,7 @@ final class TouchControlsTests: XCTestCase {
         case .gameBoy: l = DualScreenLayout.makeSingle(size: size, showsControls: buttons, aspect: 160.0 / 144.0)
         case .nes: l = DualScreenLayout.makeSingle(size: size, showsControls: buttons, aspect: 256.0 / 240.0)
         case .snes: l = DualScreenLayout.makeSingle(size: size, showsControls: buttons, aspect: 256.0 / 224.0)
+        default: l = DualScreenLayout.makeSingle(size: size, showsControls: buttons, aspect: 4.0 / 3.0)
         }
         return TouchPadLayout.make(layout: l, system: sys, showsButtons: buttons, scale: scale, stylus: sys == .ds ? l.bottom : nil)
     }
@@ -301,6 +302,7 @@ final class TouchControlsTests: XCTestCase {
         case .gameBoy: l = DualScreenLayout.makeSingle(size: frame.size, showsControls: true, aspect: 160.0 / 144.0, topReserve: reserve)
         case .nes: l = DualScreenLayout.makeSingle(size: frame.size, showsControls: true, aspect: 256.0 / 240.0, topReserve: reserve)
         case .snes: l = DualScreenLayout.makeSingle(size: frame.size, showsControls: true, aspect: 256.0 / 224.0, topReserve: reserve)
+        default: l = DualScreenLayout.makeSingle(size: frame.size, showsControls: true, aspect: 4.0 / 3.0, topReserve: reserve)
         }
         return (l.offsetBy(dx: frame.minX, dy: frame.minY), frame)
     }

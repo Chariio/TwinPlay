@@ -1,0 +1,51 @@
+# Prove Dolphin builds for TwinPlay's GameCube core.
+# macOS: ARM64 JIT, Metal, Vulkan via Dolphin's bundled MoltenVK.
+# iOS:   ARM64 cached interpreter (ENABLE_GENERIC), Metal, no JIT, no fast-math.
+# One job, one runner: a second queued macOS runner was cancelled after 15 minutes.
+# Signing is off. Nothing is uploaded. No secrets.
+name: Dolphin GameCube
+
+on:
+  push:
+    branches: [gamecube]
+
+concurrency:
+  group: dolphin-gamecube-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dolphin:
+    name: macOS JIT then iOS cached interpreter
+    runs-on: macos-15
+    timeout-minutes: 180
+    env:
+      CODE_SIGNING_ALLOWED: "NO"
+      CODE_SIGNING_REQUIRED: "NO"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: brew install cmake ninja pkg-config
+      - name: Xcode
+        run: |
+          # macos-15 has AppleClang 17. The build script relaxes Dolphin's
+          # compiler gate; std::jthread still gets -fexperimental-library.
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+          clang --version
+          xcodebuild -showsdks | grep -E 'iphoneos|macosx' || true
+      - name: Build Dolphin for macOS
+        run: bash scripts/build-dolphin.sh macos
+      - name: Build Dolphin for iOS
+        run: bash scripts/build-dolphin.sh ios
+      - name: Note
+        if: always()
+        run: |
+          {
+            echo "### Dolphin"
+            echo "macOS: JIT ARM64, Metal, Vulkan/MoltenVK."
+            echo "iOS: cached interpreter, \`ENABLE_GENERIC\` (no JIT), Metal, \`-fno-fast-math\`."
+            echo "\`CODE_SIGNING_ALLOWED=NO\`. No upload."
+          } >> "$GITHUB_STEP_SUMMARY"

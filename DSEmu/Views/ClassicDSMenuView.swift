@@ -8,7 +8,7 @@ import SwiftUI
 /// On an open iPhone Duo the two halves sit on either side of the hinge; on a regular iPhone or a
 /// closed Duo they are stacked in one compact column. All artwork is original TwinPlay styling.
 struct ClassicDSMenuView: View {
-    enum Folder: String, CaseIterable { case all, ds, gba, gb, gbc, nes, snes, n64, n3ds, favorites
+    enum Folder: String, CaseIterable { case all, ds, gba, gb, gbc, nes, snes, n64, n3ds, gamecube, favorites
         /// The system a folder holds (nil: All / Favorites hold every system).
         var system: GameSystem? {
             switch self {
@@ -20,6 +20,7 @@ struct ClassicDSMenuView: View {
             case .snes: return .snes
             case .n64: return .n64
             case .n3ds: return .n3ds
+            case .gamecube: return .gamecube
             default: return nil
             }
         }
@@ -44,6 +45,7 @@ struct ClassicDSMenuView: View {
             case .snes: return "Super NES"
             case .n64: return "N64"
             case .n3ds: return "3DS"
+            case .gamecube: return "GameCube"
             case .favorites: return "Favorites"
             }
         }
@@ -58,6 +60,7 @@ struct ClassicDSMenuView: View {
             case .snes: return "rectangle.inset.filled"
             case .n64: return "gamecontroller"
             case .n3ds: return "rectangle.split.2x1"
+            case .gamecube: return "gamecontroller"
             case .favorites: return "star.fill"
             }
         }

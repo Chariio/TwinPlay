@@ -141,13 +141,19 @@ final class EmulatorSession: ObservableObject, Identifiable {
             let snes = gbSystem == 0 && !nes && DSCoreBridge.isSNESROM(at: romURL)
             let n64 = gbSystem == 0 && !nes && !snes && DSCoreBridge.isN64ROM(at: romURL)
             let n3ds = gbSystem == 0 && !nes && !snes && !n64 && DSCoreBridge.is3DSROM(at: romURL)
-            let gba = gbSystem == 0 && !nes && !snes && !n64 && !n3ds && DSCoreBridge.isGBAROM(at: romURL)
+            let gc = gbSystem == 0 && !nes && !snes && !n64 && !n3ds && DSCoreBridge.isGameCubeROM(at: romURL)
+            let gba = gbSystem == 0 && !nes && !snes && !n64 && !n3ds && !gc && DSCoreBridge.isGBAROM(at: romURL)
             if gbSystem != 0 {
                 core = DSCoreBridge(kind: .gb)
                 BIOSStore.shared.applyGameBoy(to: core, color: gbSystem == 3)
                 try core.loadROM(at: romURL)
                 system = core.isGameBoyColor ? .gbc : .gb
                 Self.applyGameBoyVideo(core)
+            } else if gc {
+                core = DSCoreBridge(kind: .gamecube)
+                if let saveURL { core.attachSaveFile(saveURL) }
+                try core.loadROM(at: romURL)
+                system = .gamecube
             } else if n64 || n3ds {
                 core = DSCoreBridge(kind: n64 ? .n64 : .n3ds)
                 if n3ds {
@@ -187,7 +193,7 @@ final class EmulatorSession: ObservableObject, Identifiable {
         presenter = renderer == "metal" ? FramePresenter(core: core) : nil
         presenter?.singleScreenCrop = system.isSingleScreen
             ? CGSize(width: CGFloat(core.screenWidth) / 256, height: CGFloat(core.screenHeight) / 192) : nil
-        controllers.useStickAsDpad = system != .n64 && system != .n3ds
+        controllers.useStickAsDpad = system != .n64 && system != .n3ds && system != .gamecube
         controllers.zOnTriggers = system == .n64
         // Leave a core for the emulation thread and one for the UI/audio.
         let cpus = ProcessInfo.processInfo.activeProcessorCount
@@ -268,7 +274,7 @@ final class EmulatorSession: ObservableObject, Identifiable {
             switch system {
             case .ds: return 59.8261
             case .nes, .snes: return 60.0988                     // NTSC
-            case .n64, .n3ds: return 60
+            case .n64, .n3ds, .gamecube: return 60
             default: return 59.7275                              // GBA/GB/GBC: 4.194 MHz / 70224 clocks
             }
         }()
@@ -691,11 +697,24 @@ final class EmulatorSession: ObservableObject, Identifiable {
     }
 
     private func pushAnalog() {
-        guard system == .n64 || system == .n3ds else { return }
+        guard system == .n64 || system == .n3ds || system == .gamecube else { return }
         let useTouch = hypot(touchStick.0, touchStick.1) > 0.05
         let main = useTouch ? touchStick : controllers.analog
         core.setAnalog(x: main.0, y: main.1, stick: 0)
-        if system == .n3ds { core.setAnalog(x: controllers.cStick.0, y: controllers.cStick.1, stick: 1) }
+        if system == .n3ds {
+            core.setAnalog(x: controllers.cStick.0, y: controllers.cStick.1, stick: 1)
+        } else if system == .gamecube {
+            var cx = controllers.cStick.0
+            var cy = controllers.cStick.1
+            if hypot(cx, cy) < 0.2 {
+                let pad = virtualButtons.union(controllers.pressed)
+                if pad.contains(.cUp) { cy = 1 }
+                if pad.contains(.cDown) { cy = -1 }
+                if pad.contains(.cLeft) { cx = -1 }
+                if pad.contains(.cRight) { cx = 1 }
+            }
+            core.setAnalog(x: cx, y: cy, stick: 1)
+        }
     }
 
     private var lastActions = Set<PadAction>()

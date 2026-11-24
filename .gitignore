@@ -19,6 +19,13 @@ xcuserdata/
 *.cci
 *.cia
 *.cxi
+*.iso
+*.gcm
+*.rvz
+*.ciso
+*.gcz
+Core/third_party/dolphin/
+Core/third_party/dolphin-build/
 *.ipa
 *.xcarchive
 *.p8

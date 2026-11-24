@@ -4,6 +4,7 @@
 extern "C" {
 void twinplay_n64_set_paused(int paused);
 void twinplay_3ds_set_paused(int paused);
+void twinplay_gc_set_paused(int paused);
 void twinplay_n64_unload(void);
 void twinplay_3ds_unload(void);
 int twinplay_n64_available(void);
@@ -154,6 +155,7 @@ void exceptionHandler(NSException* e) {
                                    : kind == DSCoreKindSNES ? dscore::CoreKind::SNES
                                    : kind == DSCoreKindN64 ? dscore::CoreKind::N64
                                    : kind == DSCoreKindN3DS ? dscore::CoreKind::N3DS
+                                   : kind == DSCoreKindGameCube ? dscore::CoreKind::GameCube
                                                            : dscore::CoreKind::Interpreter);
         /* Load signed N64 dylibs from Frameworks only. resourcePath/plugins is
            the same as PlugIns on case-insensitive APFS, and iOS will SIGKILL
@@ -469,8 +471,14 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
     return [NSString stringWithUTF8String:s.c_str()] ?: @"";
 }
 
+static BOOL twinplayGCExt(NSString *ext) {
+    return [ext isEqualToString:@"iso"] || [ext isEqualToString:@"gcm"] || [ext isEqualToString:@"rvz"]
+        || [ext isEqualToString:@"ciso"] || [ext isEqualToString:@"gcz"] || [ext isEqualToString:@"zip"];
+}
+
 + (NSInteger)gameBoySystemOfROMAtURL:(NSURL *)url {
     NSString *ext = url.pathExtension.lowercaseString;
+    if (twinplayGCExt(ext)) return 0;
     if ([ext isEqualToString:@"gba"] || [ext isEqualToString:@"nds"] || [ext isEqualToString:@"nes"]
         || [ext isEqualToString:@"sfc"] || [ext isEqualToString:@"smc"]) return 0;
     NSFileHandle *fh = [NSFileHandle fileHandleForReadingFromURL:url error:nil];
@@ -486,6 +494,7 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
 + (BOOL)isNESROMAtURL:(NSURL *)url {
     if ([url.pathExtension.lowercaseString isEqualToString:@"nes"]) return YES;
     NSString *ext = url.pathExtension.lowercaseString;
+    if (twinplayGCExt(ext)) return NO;
     if ([ext isEqualToString:@"nds"] || [ext isEqualToString:@"gba"] || [ext isEqualToString:@"gb"]
         || [ext isEqualToString:@"gbc"] || [ext isEqualToString:@"sfc"] || [ext isEqualToString:@"smc"]
         || [ext isEqualToString:@"n64"] || [ext isEqualToString:@"z64"] || [ext isEqualToString:@"v64"]
@@ -498,6 +507,7 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
 
 + (BOOL)isSNESROMAtURL:(NSURL *)url {
     NSString *ext = url.pathExtension.lowercaseString;
+    if (twinplayGCExt(ext)) return NO;
     if ([ext isEqualToString:@"sfc"] || [ext isEqualToString:@"smc"]) return YES;
     if ([ext isEqualToString:@"nds"] || [ext isEqualToString:@"gba"] || [ext isEqualToString:@"nes"]
         || [ext isEqualToString:@"gb"] || [ext isEqualToString:@"gbc"]
@@ -512,6 +522,7 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
 
 + (BOOL)isN64ROMAtURL:(NSURL *)url {
     NSString *ext = url.pathExtension.lowercaseString;
+    if (twinplayGCExt(ext)) return NO;
     if ([ext isEqualToString:@"n64"] || [ext isEqualToString:@"z64"] || [ext isEqualToString:@"v64"]) return YES;
     if ([ext isEqualToString:@"nds"] || [ext isEqualToString:@"gba"] || [ext isEqualToString:@"nes"]
         || [ext isEqualToString:@"sfc"] || [ext isEqualToString:@"smc"] || [ext isEqualToString:@"gb"]
@@ -523,8 +534,16 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
     return dscore::isN64Image(static_cast<const uint8_t *>(h.bytes), h.length);
 }
 
++ (BOOL)isGameCubeROMAtURL:(NSURL *)url {
+    NSString *ext = url.pathExtension.lowercaseString;
+    return [ext isEqualToString:@"iso"] || [ext isEqualToString:@"gcm"]
+        || [ext isEqualToString:@"rvz"] || [ext isEqualToString:@"ciso"]
+        || [ext isEqualToString:@"gcz"] || [ext isEqualToString:@"zip"];
+}
+
 + (BOOL)is3DSROMAtURL:(NSURL *)url {
     NSString *ext = url.pathExtension.lowercaseString;
+    if (twinplayGCExt(ext)) return NO;
     if ([ext isEqualToString:@"3ds"] || [ext isEqualToString:@"cci"] || [ext isEqualToString:@"cxi"]) return YES;
     if ([ext isEqualToString:@"nds"] || [ext isEqualToString:@"gba"] || [ext isEqualToString:@"nes"]
         || [ext isEqualToString:@"sfc"] || [ext isEqualToString:@"smc"] || [ext isEqualToString:@"n64"]
@@ -537,6 +556,7 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
 
 + (BOOL)isGBAROMAtURL:(NSURL *)url {
     NSString *ext = url.pathExtension.lowercaseString;
+    if (twinplayGCExt(ext)) return NO;
     if ([ext isEqualToString:@"gba"]) return YES;
     if ([ext isEqualToString:@"nds"] || [ext isEqualToString:@"nes"] || [ext isEqualToString:@"sfc"]
         || [ext isEqualToString:@"smc"]) return NO;
@@ -575,6 +595,19 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
     if (h.length < 0xC0) return nil;
     const uint8_t *p = static_cast<const uint8_t *>(h.bytes);
     DSROMHeaderInfo *info = [[DSROMHeaderInfo alloc] init];
+    if ([self isGameCubeROMAtURL:url]) {
+        info.system = 8; info.isGBA = NO;
+        info.title = @""; info.gameCode = @"GC";
+        if (h.length >= 0x60) {
+            const uint8_t *b = p;
+            BOOL gc = b[0x1C] == 0xC2 && b[0x1D] == 0x33 && b[0x1E] == 0x9F && b[0x1F] == 0x3D;
+            if (gc) {
+                info.title = trimmedASCII(p + 0x20, 64);
+                info.gameCode = trimmedASCII(p, 4);
+            }
+        }
+        return info;
+    }
     if ([self isN64ROMAtURL:url]) {
         info.system = 6; info.isGBA = NO;
         std::string name = dscore::n64InternalName(p, h.length);
@@ -634,7 +667,8 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
 
 + (nullable DSROMBanner *)bannerForROMAtURL:(NSURL *)url {
     if ([self isGBAROMAtURL:url] || [self isNESROMAtURL:url] || [self isSNESROMAtURL:url]
-        || [self isN64ROMAtURL:url] || [self is3DSROMAtURL:url] || [self gameBoySystemOfROMAtURL:url] != 0) {
+        || [self isN64ROMAtURL:url] || [self is3DSROMAtURL:url] || [self isGameCubeROMAtURL:url]
+        || [self gameBoySystemOfROMAtURL:url] != 0) {
         DSROMHeaderInfo *info = [self headerInfoForROMAtURL:url];
         if (!info || info.title.length == 0) return nil;
         DSROMBanner *b = [[DSROMBanner alloc] init];
@@ -685,6 +719,7 @@ static NSString *trimmedASCII(const uint8_t *p, size_t n) {
     const int sys = _core->system();
     if (sys == 6 && twinplay_n64_available()) twinplay_n64_set_paused(paused ? 1 : 0);
     if (sys == 7 && twinplay_3ds_available()) twinplay_3ds_set_paused(paused ? 1 : 0);
+    if (sys == 8) twinplay_gc_set_paused(paused ? 1 : 0);
 }
 
 - (void)shutDownCore {
