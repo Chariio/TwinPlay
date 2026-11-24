@@ -102,6 +102,15 @@ endif()""",
     ControllerInterface/Quartz/Quartz.h""",
     ),
     (
+        root / "Source/Core/InputCommon/CMakeLists.txt",
+        """if(NOT ANDROID)
+  target_link_libraries(inputcommon PUBLIC LibUSB::LibUSB)
+endif()""",
+        """if(NOT ANDROID AND NOT IOS)
+  target_link_libraries(inputcommon PUBLIC LibUSB::LibUSB)
+endif()""",
+    ),
+    (
         root / "Source/Core/Common/CMakeLists.txt",
         """elseif(APPLE)
   target_sources(common PRIVATE
