@@ -36,6 +36,27 @@ git -C "$SRC" fetch --depth 1 origin "$PIN"
 git -C "$SRC" checkout --force "$PIN"
 git -C "$SRC" submodule update --init --recursive --depth 1
 
+# This pin asks for Xcode 26 / AppleClang 21 so it can use stable std::jthread.
+# The GitHub macos-15 image is AppleClang 17, and macos-26 runners are cancelled
+# after 15 minutes in the queue. Dolphin already adds -fexperimental-library when
+# libc++ is older than 20, which is what makes jthread available here.
+python3 - "$SRC/CMakeLists.txt" << 'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+t = p.read_text()
+repls = {
+    "set(AppleClang_min_version 21.0.0)": "set(AppleClang_min_version 17.0.0)",
+    "set(libc++_min_version 180000)": "set(libc++_min_version 150000)",
+    "set(Xcode_min_version 26.0)": "set(Xcode_min_version 16.0)",
+}
+for old, new in repls.items():
+    if old not in t:
+        raise SystemExit(f"version gate not found: {old}")
+    t = t.replace(old, new, 1)
+p.write_text(t)
+print("relaxed Dolphin compiler gate for the CI image")
+PY
+
 COMMON=(
   -G Ninja
   -DCMAKE_BUILD_TYPE=Release

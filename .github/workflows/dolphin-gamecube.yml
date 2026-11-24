@@ -19,7 +19,7 @@ permissions:
 jobs:
   dolphin-macos:
     name: macOS arm64 JIT Metal Vulkan
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 180
     env:
       CODE_SIGNING_ALLOWED: "NO"
@@ -30,7 +30,8 @@ jobs:
         run: brew install cmake ninja pkg-config
       - name: Xcode
         run: |
-          # Dolphin requires Xcode 26 and AppleClang 21. macos-26 ships both.
+          # macos-15 has AppleClang 17. The build script relaxes Dolphin's
+          # compiler gate; std::jthread still gets -fexperimental-library.
           sudo xcode-select -s /Applications/Xcode.app
           xcodebuild -version
           clang --version
@@ -47,7 +48,7 @@ jobs:
 
   dolphin-ios:
     name: iOS arm64 cached interpreter Metal
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 180
     env:
       CODE_SIGNING_ALLOWED: "NO"

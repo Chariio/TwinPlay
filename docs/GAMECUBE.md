@@ -29,7 +29,7 @@ export CODE_SIGNING_ALLOWED=NO
 
 The pin is `Core/third_party/dolphin-pin.txt` (`0318069674bbd7971f0db434fe1f7bd9f1c5750e` on `dolphin-emu/dolphin`). The checkout is gitignored. The iOS configure step turns off libusb, AppKit, the AGL OpenGL backend, and the Quartz keyboard backend, because those are macOS-only. The Mac build does not apply that patch.
 
-GitHub Actions (`.github/workflows/dolphin-gamecube.yml`) runs both on `macos-26` (Xcode 26, AppleClang 21, which this Dolphin pin requires) with `CODE_SIGNING_ALLOWED=NO`. It does not sign, and it does not upload to App Store Connect or TestFlight. No secrets.
+GitHub Actions (`.github/workflows/dolphin-gamecube.yml`) runs both on `macos-15` with `CODE_SIGNING_ALLOWED=NO`. It does not sign, and it does not upload to App Store Connect or TestFlight. No secrets. That image has AppleClang 17. The build script lowers this pin's Xcode 26 / AppleClang 21 / libc++ 18 gate in the CI checkout only; Dolphin then enables `-fexperimental-library` so `std::jthread` still compiles. `macos-26` has AppleClang 21, but those jobs were cancelled after 15 minutes waiting for a runner.
 
 `scripts/check-dolphin-build.py` fails the macOS job unless `JitArm64`, Metal and Vulkan were compiled, and fails the iOS job if `JitArm64` was compiled, if `_M_GENERIC` is missing, or if `-ffast-math` appears.
 
