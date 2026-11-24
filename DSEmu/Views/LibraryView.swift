@@ -485,8 +485,60 @@ struct LibraryView: View {
     }
 
     private var standardBody: some View {
-        NavigationStack {
-            ScrollViewReader { proxy in
+        NavigationStack { libraryPage }
+    }
+
+    private var libraryPage: some View {
+        libraryScroll
+            .overlay(alignment: .bottom) { libraryHints }
+            .safeAreaInset(edge: .bottom, spacing: 0) { LibraryAdBanner() }
+            .simultaneousGesture(DragGesture(minimumDistance: 12).onChanged { _ in hideHints() })
+            .simultaneousGesture(TapGesture().onEnded { pokeHints() })
+            .onAppear { pokeHints() }
+            .onChange(of: padFocus) { _ in pokeHints() }
+            .padScope("library") { handlePad($0) }
+            .background(LibraryBackgroundView())
+            .searchable(text: $search, prompt: "Search games")
+            .navigationTitle("TwinPlay")
+            .toolbar { libraryToolbar }
+            .overlay { libraryDialog }
+    }
+
+    @ViewBuilder private var libraryHints: some View {
+        if hintsVisible {
+            ControllerHintBar(items: [(.left, "Move"), (.a, "Play"), (.y, "Options"), (.x, isCoverFlow ? "Grid" : "Cover Flow"),
+                                      (.l, "Filter"), (.menu, "Settings")])
+                .padding(.bottom, 6)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .allowsHitTesting(false)
+        }
+    }
+
+    @ToolbarContentBuilder private var libraryToolbar: some ToolbarContent {
+        if #available(iOS 26.0, *) {
+            ToolbarItem(placement: .largeTitle) {
+                Text("TwinPlay").font(.largeTitle.bold()).frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(backgroundID == "none" ? Color.primary : Color.white)
+            }
+        }
+        ToolbarItem(placement: .navigationBarLeading) {
+            Menu { libraryMenuItems } label: { Image(systemName: "line.3.horizontal") }
+                .accessibilityLabel("Library menu")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button { toggleLayout() } label: {
+                Image(systemName: isCoverFlow ? "square.grid.2x2" : "rectangle.stack")
+            }
+            .accessibilityLabel((isCoverFlow ? "Show as grid" : "Show as Cover Flow").loc)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Menu { importMenuItems } label: { Image(systemName: "plus") }
+                .accessibilityLabel("Add games")
+        }
+    }
+
+    private var libraryScroll: some View {
+        ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: shortLandscape ? 10 : 16) {
                     if navList.indices.contains(padFocus) {
@@ -536,54 +588,6 @@ struct LibraryView: View {
                 // Visible height = frame minus the bars laid over it (nav bar, search + hint bar inset).
                 let h = g.size.height - g.safeAreaInsets.top - g.safeAreaInsets.bottom
                 Color.clear.onAppear { viewportHeight = h }.onChange(of: h) { viewportHeight = $0 } })
-            }
-            .overlay(alignment: .bottom) {
-                // Floats over the content (no layout jump) and fades out a few seconds after the last
-                // touch/button press or as soon as the library scrolls; any interaction brings it back.
-                if hintsVisible {
-                    ControllerHintBar(items: [(.left, "Move"), (.a, "Play"), (.y, "Options"), (.x, isCoverFlow ? "Grid" : "Cover Flow"),
-                                              (.l, "Filter"), (.menu, "Settings")])
-                        .padding(.bottom, 6)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        .allowsHitTesting(false)
-                }
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                LibraryAdBanner()
-            }
-            .simultaneousGesture(DragGesture(minimumDistance: 12).onChanged { _ in hideHints() })
-            .simultaneousGesture(TapGesture().onEnded { pokeHints() })
-            .onAppear { pokeHints() }
-            .onChange(of: padFocus) { _ in pokeHints() }
-            .padScope("library") { handlePad($0) }
-            .background(LibraryBackgroundView())
-            .searchable(text: $search, prompt: "Search games")
-            .navigationTitle("TwinPlay")
-            .toolbar {
-                // The large title sits on the library scene too: light-on-dark there (same rule as
-                // the content), otherwise it draws black in light mode.
-                if #available(iOS 26.0, *) {
-                    ToolbarItem(placement: .largeTitle) {
-                        Text("TwinPlay").font(.largeTitle.bold()).frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundStyle(backgroundID == "none" ? Color.primary : Color.white)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Menu { libraryMenuItems } label: { Image(systemName: "line.3.horizontal") }
-                        .accessibilityLabel("Library menu")
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { toggleLayout() } label: {
-                        Image(systemName: isCoverFlow ? "square.grid.2x2" : "rectangle.stack")
-                    }
-                    .accessibilityLabel((isCoverFlow ? "Show as grid" : "Show as Cover Flow").loc)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Menu { importMenuItems } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add games")
-                }
-            }
-            .overlay { libraryDialog }
         }
     }
 

@@ -105,11 +105,14 @@ cmake_args=(
     -DENABLE_CTEST=OFF
 )
 if [[ "$platform" == iphoneos ]]; then
+    # USE_OPENGL is what pulls in glsm and the GL context. USE_GLES makes that
+    # path OpenGL ES and skips the desktop GL headers, which iOS does not have.
     cmake_args+=(
         -DCMAKE_SYSTEM_NAME=iOS
         -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0
         -DUSE_GLES=ON
-        -DUSE_OPENGL=OFF
+        -DUSE_OPENGL=ON
+        -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-framework,OpenGLES
     )
 else
     cmake_args+=(
@@ -130,11 +133,11 @@ fi
 cp -f "$found" "$dylib"
 install_name_tool -id "@rpath/flycast_libretro.dylib" "$dylib" || true
 
-# The dylib exports only retro_* and is stripped, so the dynarec symbol lives in the
-# object file, not in `nm` of the finished library.
+# Get_Sh4Recompiler lives in driver.cpp and is compiled only when the dynarec is on.
+# The finished dylib exports retro_* and is stripped, so look at the object file.
 has_rec=0
-rec_obj="$(find "$build" -name 'rec_arm64.cpp.o' -print -quit || true)"
-if [[ -n "$rec_obj" ]] && nm "$rec_obj" | grep -q 'Get_Sh4Recompiler'; then
+driver_obj="$(find "$build" -name 'driver.cpp.o' -print -quit || true)"
+if [[ -n "$driver_obj" ]] && nm "$driver_obj" | grep -q 'Get_Sh4Recompiler'; then
     has_rec=1
 fi
 if [[ "$platform" == iphoneos && "$has_rec" == 1 ]]; then

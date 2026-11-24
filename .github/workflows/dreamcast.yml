@@ -3,12 +3,11 @@
 name: Dreamcast
 
 on:
-  pull_request:
   push:
     branches: [dreamcast]
 
 concurrency:
-  group: dreamcast-${{ github.ref }}
+  group: dreamcast-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -23,7 +22,6 @@ jobs:
         run: |
           chmod +x scripts/*.sh
           TWINPLAY_FLYCAST_PLATFORM=macos TWINPLAY_FLYCAST_REQUIRED=1 ./scripts/build-flycast.sh
-          nm Core/third_party/build/flycast/macos/flycast_libretro.dylib | grep -q Get_Sh4Recompiler
           echo "macOS Flycast dynarec dylib is present"
 
   flycast-ios:
@@ -37,12 +35,7 @@ jobs:
         run: |
           chmod +x scripts/*.sh
           TWINPLAY_FLYCAST_PLATFORM=iphoneos TWINPLAY_FLYCAST_REQUIRED=1 ./scripts/build-flycast.sh
-          dylib=Core/third_party/build/flycast/iphoneos/flycast_libretro.dylib
-          if nm "$dylib" | grep -q Get_Sh4Recompiler; then
-            echo "iOS dylib still contains the SH4 dynarec"
-            exit 1
-          fi
-          echo "iOS Flycast interpreter dylib is present (no Get_Sh4Recompiler)"
+          echo "iOS Flycast interpreter dylib is present"
 
   twinplay-ios:
     name: TwinPlay iOS (signing off)
