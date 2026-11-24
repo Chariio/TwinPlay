@@ -214,6 +214,14 @@ if old_hdr not in um:
     raise SystemExit("MTLUtil.mm NSScreen check not found")
 util_mm.write_text(um.replace(old_hdr, new_hdr, 1))
 print("iOS patch applied: MTLUtil")
+mem = root / "Source/Core/Core/MemTools.cpp"
+mt = mem.read_text()
+old_arch = "#elif defined(_M_ARM_64)\n#define THREAD_STATE64_COUNT ARM_THREAD_STATE64_COUNT"
+new_arch = "#elif defined(_M_ARM_64) || defined(__aarch64__)\n#define THREAD_STATE64_COUNT ARM_THREAD_STATE64_COUNT"
+if old_arch not in mt:
+    raise SystemExit("MemTools.cpp arm64 guard not found")
+mem.write_text(mt.replace(old_arch, new_arch, 1))
+print("iOS patch applied: MemTools.cpp")
 PY
   # JIT-less. ENABLE_GENERIC defines _M_GENERIC and does not compile JitArm64.
   # -fno-fast-math: Dolphin's cached interpreter miscompiles under fast-math.
@@ -225,9 +233,9 @@ PY
     -DENABLE_NOGUI=OFF \
     -DENABLE_VULKAN=OFF \
     -DUSE_BUNDLED_MOLTENVK=OFF \
-    -DCMAKE_C_FLAGS="-fno-fast-math -DTWINPLAY_NO_LIBUSB=1 -DTWINPLAY_IOS_METAL=1" \
-    -DCMAKE_CXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1 -DTWINPLAY_NO_LIBUSB=1 -DTWINPLAY_IOS_METAL=1" \
-    -DCMAKE_OBJCXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1 -DTWINPLAY_NO_LIBUSB=1 -DTWINPLAY_IOS_METAL=1"
+    -DCMAKE_C_FLAGS="-fno-fast-math -DTWINPLAY_NO_LIBUSB=1 -DTWINPLAY_IOS_METAL=1 -DUSE_SIGACTION_ON_APPLE=1" \
+    -DCMAKE_CXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1 -DTWINPLAY_NO_LIBUSB=1 -DTWINPLAY_IOS_METAL=1 -DUSE_SIGACTION_ON_APPLE=1" \
+    -DCMAKE_OBJCXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1 -DTWINPLAY_NO_LIBUSB=1 -DTWINPLAY_IOS_METAL=1 -DUSE_SIGACTION_ON_APPLE=1"
   ninja -C "$BUILD" core videometal
   python3 "$ROOT/scripts/check-dolphin-build.py" ios "$BUILD"
   python3 "$ROOT/scripts/compile-gc-host.py" "$BUILD/compile_commands.json" \
