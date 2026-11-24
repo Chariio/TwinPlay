@@ -160,6 +160,16 @@ for path, old, new in edits:
         raise SystemExit(f"iOS patch did not match {path}")
     path.write_text(text.replace(old, new, 1))
     print(f"iOS patch applied: {path.name}")
+watcher = root / "Externals/watcher/watcher/include/wtr/watcher.hpp"
+wt = watcher.read_text()
+old_fs = "#if defined(__APPLE__)\n\n#include <CoreFoundation/CoreFoundation.h>"
+new_fs = "#if defined(__APPLE__) && !defined(WATCHER_NO_FSEVENTS)\n\n#include <CoreFoundation/CoreFoundation.h>"
+old_fb = "#if ! defined(__linux__) && ! defined(__ANDROID_API__) && ! defined(__APPLE__) \\\n  && ! defined(_WIN32)"
+new_fb = "#if (! defined(__linux__) && ! defined(__ANDROID_API__) && ! defined(__APPLE__) \\\n  && ! defined(_WIN32)) || defined(WATCHER_NO_FSEVENTS)"
+if old_fs not in wt or old_fb not in wt:
+    raise SystemExit("watcher.hpp FSEvents guards not found")
+watcher.write_text(wt.replace(old_fs, new_fs, 1).replace(old_fb, new_fb, 1))
+print("iOS patch applied: watcher.hpp")
 PY
   # JIT-less. ENABLE_GENERIC defines _M_GENERIC and does not compile JitArm64.
   # -fno-fast-math: Dolphin's cached interpreter miscompiles under fast-math.
@@ -172,7 +182,8 @@ PY
     -DENABLE_VULKAN=OFF \
     -DUSE_BUNDLED_MOLTENVK=OFF \
     -DCMAKE_C_FLAGS="-fno-fast-math" \
-    -DCMAKE_CXX_FLAGS="-fno-fast-math"
+    -DCMAKE_CXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1" \
+    -DCMAKE_OBJCXX_FLAGS="-fno-fast-math -DWATCHER_NO_FSEVENTS=1"
   ninja -C "$BUILD" core videometal
   python3 "$ROOT/scripts/check-dolphin-build.py" ios "$BUILD"
   python3 "$ROOT/scripts/compile-gc-host.py" "$BUILD/compile_commands.json" \
