@@ -9,13 +9,13 @@ import Foundation
 enum PadShape: Equatable { case circle, capsule, shoulder, dpad, dot, stick }
 
 /// Which system's controls to lay out.
-enum PadSystem: Equatable { case ds, gba, gameBoy, nes, snes, n64, n3ds }
+enum PadSystem: Equatable { case ds, gba, gameBoy, nes, snes, n64, n3ds, gamecube }
 
 extension PadSystem {
     /// L and R exist on DS, GBA and Super NES. NES and Game Boy do not have shoulder buttons.
-    var showsShoulders: Bool { self == .ds || self == .gba || self == .snes || self == .n64 || self == .n3ds }
+    var showsShoulders: Bool { self == .ds || self == .gba || self == .snes || self == .n64 || self == .n3ds || self == .gamecube }
     /// Four face buttons in a diamond (X above, B below, Y left, A right).
-    var diamondFace: Bool { self == .ds || self == .snes || self == .n3ds }
+    var diamondFace: Bool { self == .ds || self == .snes || self == .n3ds || self == .gamecube }
 }
 
 /// One on-screen control: what it draws (`rect`) and where it can be touched (`hit`, larger).
@@ -205,7 +205,7 @@ struct TouchPadLayout: Equatable {
             let w: CGFloat = 96 * min(s, 1.15), h: CGFloat = 38
             z.append(shoulder("L", .l, CGRect(x: a.minX + pad, y: a.minY + 8, width: w, height: h)))
             z.append(shoulder("R", .r, CGRect(x: a.maxX - pad - w, y: a.minY + 8, width: w, height: h)))
-            if sys == .n64 {
+            if sys == .n64 || sys == .gamecube {
                 z.append(shoulder("Z", .z, CGRect(x: a.midX - w / 2, y: a.minY + 8, width: w, height: h)))
             } else if sys == .n3ds {
                 z.append(shoulder("ZL", .zl, CGRect(x: a.minX + pad, y: a.minY + 50, width: w * 0.7, height: h * 0.8)))
@@ -341,6 +341,7 @@ struct TouchPadLayout: Equatable {
     // MARK: building blocks
 
     private static func clusters(_ sys: PadSystem, unit u: CGFloat, left: CGPoint, right: CGPoint, steep: Bool = false) -> [PadZone] {
+        if sys == .gamecube { return gcClusters(unit: u, left: left, right: right) }
         if sys == .n64 || sys == .n3ds { return analogClusters(sys, unit: u, left: left, right: right) }
         let dRect = CGRect(x: left.x - u / 2, y: left.y - u / 2, width: u, height: u)
         var z = [PadZone(button: [.up, .down, .left, .right], label: "D-pad", shape: .dpad, rect: dRect,
@@ -394,6 +395,27 @@ struct TouchPadLayout: Equatable {
             z += [face("C↑", .cUp, cx, cy - co, c), face("C↓", .cDown, cx, cy + co, c),
                   face("C←", .cLeft, cx - co, cy, c), face("C→", .cRight, cx + co, cy, c)]
         }
+        return z
+    }
+
+    /// GameCube: stick, A (right) / B (left) / X (up) / Y (down), and a small C cluster.
+    /// The C cluster is a digital stand-in for the C-stick. A controller's right stick wins.
+    private static func gcClusters(unit u: CGFloat, left: CGPoint, right: CGPoint) -> [PadZone] {
+        let stick = CGRect(x: left.x - u / 2, y: left.y - u / 2, width: u, height: u)
+        var z = [PadZone(button: [], label: "Stick", shape: .stick, rect: stick,
+                         hit: stick.insetBy(dx: -u * 0.08, dy: -u * 0.08), hitRadius: nil, slideIn: false)]
+        func face(_ label: String, _ b: DSButton, _ dx: CGFloat, _ dy: CGFloat, _ d: CGFloat) -> PadZone {
+            let c = CGPoint(x: right.x + dx, y: right.y + dy)
+            let rect = CGRect(x: c.x - d / 2, y: c.y - d / 2, width: d, height: d)
+            let r = max(d / 2 * 1.25, TouchSettings.minTarget / 2)
+            return PadZone(button: b, label: label, shape: .circle, rect: rect,
+                           hit: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2), hitRadius: r, slideIn: true)
+        }
+        let d = u * 0.34, o = u * 0.30
+        z += [face("X", .x, 0, -o, d), face("Y", .y, 0, o, d), face("B", .b, -o, 0, d), face("A", .a, o, 0, d)]
+        let c = u * 0.22, co = u * 0.20, cy = u * 0.72
+        z += [face("C↑", .cUp, 0, cy - co, c), face("C↓", .cDown, 0, cy + co, c),
+              face("C←", .cLeft, -co, cy, c), face("C→", .cRight, co, cy, c)]
         return z
     }
 

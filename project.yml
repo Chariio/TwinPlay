@@ -47,6 +47,9 @@ targets:
     sources:
       - path: DSEmu
       - path: Shared
+      - path: Core/gamecube
+        excludes:
+          - twinplay_gc_host.cpp
       - path: Core/src          # SnesTrace.cpp lives here so the iOS link gets snesTrace* / snesDsp*
       - path: Core/third_party/ares/nall/nall/nall.cpp
       - path: Core/third_party/ares/libco/libco.c
@@ -247,6 +250,11 @@ targets:
             UTTypeConformsTo: [public.data]
             UTTypeTagSpecification:
               public.filename-extension: [3ds, cci, cxi]
+          - UTTypeIdentifier: com.charlie.dsemu.gamecube-rom
+            UTTypeDescription: GameCube game image
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [iso, gcm, rvz, ciso, gcz]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.charlie.dsemu
@@ -263,6 +271,7 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: DSEmu/Bridge/DSEmu-Bridging-Header.h
         HEADER_SEARCH_PATHS:
           - "$(SRCROOT)/Core/include"
+          - "$(SRCROOT)/Core/gamecube"
           - "$(SRCROOT)/Core/src"
           - "$(SRCROOT)/Core/third_party/ares"
           - "$(SRCROOT)/Core/third_party/ares/ares"

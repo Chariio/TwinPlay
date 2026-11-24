@@ -15,6 +15,7 @@ typedef NS_ENUM(NSInteger, DSCoreKind) {
     DSCoreKindSNES NS_SWIFT_NAME(snes) = 5, // Super NES (single 256x224 screen)
     DSCoreKindN64 NS_SWIFT_NAME(n64) = 6,   // N64 (cached interpreter, no JIT)
     DSCoreKindN3DS NS_SWIFT_NAME(n3ds) = 7, // 3DS (Azahar FastInterp, no JIT)
+    DSCoreKindGameCube NS_SWIFT_NAME(gamecube) = 8, // GameCube (Dolphin; iOS cached interpreter, no JIT)
 };
 
 /// Basic identity of a cartridge read from its header (DS or GBA). Used to find box art.
@@ -127,6 +128,9 @@ typedef NS_ENUM(NSInteger, DSCoreKind) {
 + (BOOL)isN64ROMAtURL:(NSURL *)url NS_SWIFT_NAME(isN64ROM(at:));
 /// .3ds/.cci/.cxi, or an NCSD/NCCH magic at 0x100.
 + (BOOL)is3DSROMAtURL:(NSURL *)url NS_SWIFT_NAME(is3DSROM(at:));
+/// .iso/.gcm/.rvz/.ciso/.gcz/.zip. A Wii disc with a GameCube extension still returns YES;
+/// booting it fails with a clear error. The app does not ship these files.
++ (BOOL)isGameCubeROMAtURL:(NSURL *)url NS_SWIFT_NAME(isGameCubeROM(at:));
 /// 0 if the file is not a Game Boy cartridge, 2 for Game Boy, 3 for Game Boy Color
 /// (CGB flag in the header, or the .gbc extension). Any thread.
 + (NSInteger)gameBoySystemOfROMAtURL:(NSURL *)url NS_SWIFT_NAME(gameBoySystem(ofROMAt:));

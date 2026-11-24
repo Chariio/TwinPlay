@@ -17,6 +17,7 @@ enum RetroAchievementsRules {
         case .snes: return 3
         case .n64: return 2
         case .n3ds: return 62
+        case .gamecube: return 16
         case .ds: return 18
         }
     }

@@ -1,6 +1,149 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Wii games were skipped. TwinPlay plays GameCube games only.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se omitieron los juegos de Wii. TwinPlay solo ejecuta juegos de GameCube."
+          }
+        }
+      }
+    },
+    "GameCube is built for a modern iPhone or iPad (iPhone 15 Pro or newer, or an iPad with an M-series chip). Older devices may run slowly.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GameCube está pensado para un iPhone o iPad reciente (iPhone 15 Pro o posterior, o un iPad con chip de la serie M). En dispositivos más antiguos puede ir lento."
+          }
+        }
+      }
+    },
+    "This is a Wii game. TwinPlay plays GameCube games only.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto es un juego de Wii. TwinPlay solo ejecuta juegos de GameCube."
+          }
+        }
+      }
+    },
+    "That file is not a game image TwinPlay can import.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ese archivo no es una imagen de juego que TwinPlay pueda importar."
+          }
+        }
+      }
+    },
+    "The GameCube core is not linked into this build. On a Mac, run scripts/build-dolphin.sh and rebuild.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El núcleo de GameCube no está enlazado en esta compilación. En un Mac, ejecuta scripts/build-dolphin.sh y vuelve a compilar."
+          }
+        }
+      }
+    },
+    "GameCube": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GameCube"
+          }
+        }
+      }
+    },
+    "GameCube skin": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aspecto de GameCube"
+          }
+        }
+      }
+    },
+    "Dolphin could not boot this game.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dolphin no pudo arrancar este juego."
+          }
+        }
+      }
+    },
+    "Dolphin could not read this game. Use .iso, .gcm, .rvz, .ciso, .gcz or .zip.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dolphin no pudo leer este juego. Usa .iso, .gcm, .rvz, .ciso, .gcz o .zip."
+          }
+        }
+      }
+    },
+    "No GameCube game was selected.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se ha elegido un juego de GameCube."
+          }
+        }
+      }
+    },
+    "GameCube games are opened from their file, not copied into memory.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los juegos de GameCube se abren desde su archivo; no se copian en memoria."
+          }
+        }
+      }
+    },
+    "Pick the folder where you keep your .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci, .cxi, .iso, .gcm, .rvz, .ciso, .gcz and .zip files, for example On My iPhone › Downloads. TwinPlay imports every game in it and its subfolders and skips ones you already have. Use “Find new games” later to pick up new ones.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige la carpeta donde guardas tus archivos .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci, .cxi, .iso, .gcm, .rvz, .ciso, .gcz y .zip, por ejemplo En mi iPhone › Descargas. TwinPlay importa cada juego de esa carpeta y de sus subcarpetas y omite los que ya tienes. Usa «Buscar juegos nuevos» más tarde para recoger los nuevos."
+          }
+        }
+      }
+    },
+    "Add your own .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci, .cxi, .iso, .gcm, .rvz, .ciso, .gcz or .zip games with the + button: pick files, or a whole folder (subfolders included).": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade tus propios juegos .nds, .gba, .gb, .gbc, .nes, .sfc, .smc, .n64, .z64, .v64, .3ds, .cci, .cxi, .iso, .gcm, .rvz, .ciso, .gcz o .zip con el botón +: elige archivos o una carpeta entera (incluidas las subcarpetas)."
+          }
+        }
+      }
+    },
     "": {
       "shouldTranslate": false
     },

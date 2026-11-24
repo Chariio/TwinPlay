@@ -132,7 +132,8 @@ public:
     // 2 = Game Boy, 3 = Game Boy Color (one 160x144 picture in the top-left of screen 0).
     // 4 = NES (one 256x240 picture), 5 = Super NES (one 256x224 picture).
     // 6 = N64 (one picture, presented in the 256x192 top buffer). 7 = 3DS (two screens,
-    // presented in the same 256x192 pair the DS uses).
+    // presented in the same 256x192 pair the DS uses). 8 = GameCube (one 4:3 picture
+    // in that same top buffer; Dolphin draws it).
     virtual int system() const { return 0; }
     // Game Boy only: DMG shade palette (0 green, 1 gray) and LCD colour correction for GBC colours.
     virtual void setVideoOptions(int /*dmgPalette*/, bool /*colorCorrect*/) {}
@@ -144,7 +145,7 @@ public:
     virtual std::string statusText() const { return {}; }
 };
 
-enum class CoreKind { TestPattern, Interpreter, GBA, GB, NES, SNES, N64, N3DS };
+enum class CoreKind { TestPattern, Interpreter, GBA, GB, NES, SNES, N64, N3DS, GameCube };
 // True if the image looks like a Game Boy / Game Boy Color cartridge (header checksum at 0x14D).
 bool isGBImage(const u8* data, size_t size);
 // True if the image looks like a Game Boy Advance cartridge (ARM branch at 0, fixed byte 0x96 at 0xB2).

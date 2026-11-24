@@ -1,0 +1,58 @@
+# Prove Dolphin builds for TwinPlay's GameCube core.
+# macOS: ARM64 JIT, Metal, Vulkan via Dolphin's bundled MoltenVK.
+# iOS:   ARM64 cached interpreter (ENABLE_GENERIC), Metal, no JIT, no fast-math.
+# Signing is off. Nothing is uploaded. No secrets.
+name: Dolphin GameCube
+
+on:
+  pull_request:
+  push:
+    branches: [gamecube]
+
+permissions:
+  contents: read
+
+jobs:
+  dolphin-macos:
+    name: macOS arm64 JIT Metal Vulkan
+    runs-on: macos-15
+    timeout-minutes: 180
+    env:
+      CODE_SIGNING_ALLOWED: "NO"
+      CODE_SIGNING_REQUIRED: "NO"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: brew install cmake ninja pkg-config
+      - name: Build Dolphin for macOS
+        run: bash scripts/build-dolphin.sh macos
+      - name: Note
+        if: always()
+        run: |
+          {
+            echo "### macOS Dolphin"
+            echo "JIT ARM64, Metal, Vulkan/MoltenVK, \`CODE_SIGNING_ALLOWED=NO\`."
+            echo "No App Store Connect and no TestFlight upload."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  dolphin-ios:
+    name: iOS arm64 cached interpreter Metal
+    runs-on: macos-15
+    timeout-minutes: 180
+    env:
+      CODE_SIGNING_ALLOWED: "NO"
+      CODE_SIGNING_REQUIRED: "NO"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: brew install cmake ninja pkg-config
+      - name: Build Dolphin for iOS
+        run: bash scripts/build-dolphin.sh ios
+      - name: Note
+        if: always()
+        run: |
+          {
+            echo "### iOS Dolphin"
+            echo "Cached interpreter, \`ENABLE_GENERIC\` (no JIT), Metal, dual-core settings in the host, \`-fno-fast-math\`."
+            echo "No StikDebug. No upload."
+          } >> "$GITHUB_STEP_SUMMARY"

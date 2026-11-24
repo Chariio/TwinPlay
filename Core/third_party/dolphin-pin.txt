@@ -1,0 +1,4 @@
+# Dolphin pin for TwinPlay GameCube. scripts/build-dolphin.sh checks this out.
+# No ROMs, BIOS, IPL or games are fetched. Source only.
+# https://github.com/dolphin-emu/dolphin  (GPL-2.0-or-later)
+0318069674bbd7971f0db434fe1f7bd9f1c5750e https://github.com/dolphin-emu/dolphin.git

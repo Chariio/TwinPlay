@@ -81,7 +81,7 @@ Además, una cuenta gratis permite como máximo 3 apps instaladas así a la vez.
 
 ## 7. Importar tus juegos
 
-- En la app pulsa **+** y elige tus archivos `.nds`, `.gba`, `.gb`, `.gbc`, `.nes`, `.sfc` o `.smc` (de iCloud Drive, "En mi iPhone", etc.).
+- En la app pulsa **+** y elige tus archivos `.nds`, `.gba`, `.gb`, `.gbc`, `.nes`, `.sfc`, `.smc`, `.iso`, `.gcm`, `.rvz`, `.ciso`, `.gcz` o `.zip` (de iCloud Drive, "En mi iPhone", etc.). Los seis últimos son juegos de GameCube. Los discos de Wii se rechazan. Ver [docs/GAMECUBE.md](docs/GAMECUBE.md).
   Se copian a la carpeta de la app (`Documentos/ROMs`), visible también en la app Archivos ▸ TwinPlay.
 - Usa solo copias de juegos que te pertenezcan. La app no incluye ni descarga juegos ni BIOS.
 - Las partidas del cartucho se guardan en `Documentos/Saves/<juego>.sav`; los estados en `Documentos/States`.

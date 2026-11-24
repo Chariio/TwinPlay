@@ -67,6 +67,7 @@ final class TitleScreenGenerator: ObservableObject {
 
     /// Runs the game for up to 10 s (GBA) / 18 s (DS) of emulated time and returns the best top-screen frame.
     nonisolated static func capture(rom: URL, seconds: Double? = nil) -> UIImage? {
+        if DSCoreBridge.isGameCubeROM(at: rom) { return nil }
         let gb = DSCoreBridge.gameBoySystem(ofROMAt: rom) != 0
         let nes = !gb && DSCoreBridge.isNESROM(at: rom)
         let snes = !gb && !nes && DSCoreBridge.isSNESROM(at: rom)

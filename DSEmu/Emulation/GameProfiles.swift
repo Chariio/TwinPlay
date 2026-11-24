@@ -105,7 +105,7 @@ enum GameProfiles {
             if let hi = hdr?.hi { keys.append(hi ? "snes:map:hi" : "snes:map:lo") }
             keys.append("snes")
             return GameIdentity(primary: keys[0], keys: keys)
-        case .n64, .n3ds:
+        case .n64, .n3ds, .gamecube:
             let prefix = system.rawValue
             return GameIdentity(primary: prefix, keys: [prefix])
         }

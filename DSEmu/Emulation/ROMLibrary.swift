@@ -96,7 +96,8 @@ final class ROMLibrary: ObservableObject {
     static let snesType = UTType(importedAs: "com.charlie.dsemu.snes-rom", conformingTo: .data)
     static let n64Type = UTType(importedAs: "com.charlie.dsemu.n64-rom", conformingTo: .data)
     static let n3dsType = UTType(importedAs: "com.charlie.dsemu.3ds-rom", conformingTo: .data)
-    static let romExtensions: Set<String> = ["nds", "gba", "gb", "gbc", "nes", "sfc", "smc", "n64", "z64", "v64", "3ds", "cci", "cxi"]
+    static let gcType = UTType(importedAs: "com.charlie.dsemu.gamecube-rom", conformingTo: .data)
+    static let romExtensions: Set<String> = ["nds", "gba", "gb", "gbc", "nes", "sfc", "smc", "n64", "z64", "v64", "3ds", "cci", "cxi", "iso", "gcm", "rvz", "ciso", "gcz", "zip"]
     static let ndsType = UTType(importedAs: "com.charlie.dsemu.nds-rom", conformingTo: .data)
 
     @Published private(set) var entries: [Entry] = []
@@ -186,6 +187,7 @@ final class ROMLibrary: ObservableObject {
         case "sfc", "smc": return .snes
         case "n64", "z64", "v64": return .n64
         case "3ds", "cci", "cxi": return .n3ds
+        case "iso", "gcm", "rvz", "ciso", "gcz", "zip": return .gamecube
         case "gb", "gbc", "sgb":
             switch headerSystem {
             case 3: return .gbc
@@ -257,9 +259,18 @@ final class ROMLibrary: ObservableObject {
         for source in urls {
             let scoped = source.startAccessingSecurityScopedResource()
             defer { if scoped { source.stopAccessingSecurityScopedResource() } }
-            guard Self.romExtensions.contains(source.pathExtension.lowercased()) else {
-                lastError = String(localized: "\(source.lastPathComponent) is not a .nds, .gba, .gb or .gbc file")
+            let ext = source.pathExtension.lowercased()
+            guard Self.romExtensions.contains(ext) else {
+                lastError = String(localized: "That file is not a game image TwinPlay can import.")
                 continue
+            }
+            if ext == "iso" || ext == "gcm", let fh = try? FileHandle(forReadingFrom: source) {
+                let header = (try? fh.read(upToCount: 0x20)) ?? Data()
+                try? fh.close()
+                if GameCubeDisc.kind(header: header) == .wii {
+                    lastError = GameCubeDisc.wiiRejected.loc
+                    continue
+                }
             }
             let destination = romsDirectory.appendingPathComponent(source.lastPathComponent)
             do {
@@ -453,7 +464,7 @@ final class ROMLibrary: ObservableObject {
 // MARK: - Folder import
 
 extension ROMLibrary {
-    struct FolderScanResult { var added = 0; var duplicates = 0; var failed = 0; var folderMissing = false }
+    struct FolderScanResult { var added = 0; var duplicates = 0; var failed = 0; var folderMissing = false; var skippedWii = 0 }
 
     /// Scans `folder` (and its subfolders) off the main thread and imports games not in the
     /// library yet. `quiet`: report only when something new was found (launch auto-find).
@@ -473,6 +484,15 @@ extension ROMLibrary {
             result.duplicates = plan.duplicates
             var added: [String] = []
             for item in plan.imports {
+                let ext = item.source.pathExtension.lowercased()
+                if ext == "iso" || ext == "gcm", let fh = try? FileHandle(forReadingFrom: item.source) {
+                    let header = (try? fh.read(upToCount: 0x20)) ?? Data()
+                    try? fh.close()
+                    if GameCubeDisc.kind(header: header) == .wii {
+                        result.skippedWii += 1
+                        continue
+                    }
+                }
                 do {
                     try FileManager.default.copyItem(at: item.source, to: romsDir.appendingPathComponent(item.name))
                     added.append(item.name)
@@ -492,6 +512,7 @@ extension ROMLibrary {
             var msg = r.added == 0 ? String(localized: "No new games found") : r.added == 1 ? String(localized: "Imported 1 new game") : String(localized: "Imported \(r.added) new games")
             if r.duplicates > 0 { msg += " · " + String(localized: "\(r.duplicates) already in the library") }
             if r.failed > 0 { msg += " · " + String(localized: "\(r.failed) could not be copied") }
+            if r.skippedWii > 0 { msg += " · " + String(localized: "Wii games were skipped. TwinPlay plays GameCube games only.") }
             lastError = msg + "."
         }
         completion?(r)
