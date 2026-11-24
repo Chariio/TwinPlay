@@ -10,7 +10,7 @@ on:
 jobs:
   flycast-macos:
     name: Flycast macOS arm64 (dynarec)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Tools
@@ -24,7 +24,7 @@ jobs:
 
   flycast-ios:
     name: Flycast iOS arm64 (interpreter, no JIT)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Tools
@@ -42,7 +42,7 @@ jobs:
 
   twinplay-ios:
     name: TwinPlay iOS (signing off)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Generate the Xcode project
@@ -64,7 +64,7 @@ jobs:
 
   twinplay-macos:
     name: TwinPlay macOS host (signing off)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Generate the Xcode project
