@@ -64,7 +64,8 @@ if [[ "${TWINPLAY_FLYCAST_PLATFORM:-}" == iphoneos || "${PLATFORM_NAME:-}" == ip
     sysroot="$(xcrun --sdk iphoneos --show-sdk-path)"
     # TARGET_NO_REC is Flycast's own switch: FEAT_SHREC / FEAT_AREC / FEAT_DSPREC
     # become DYNAREC_NONE, so no executable pages are generated.
-    defs="-DTARGET_NO_REC -DTARGET_IPHONE"
+    # IOS selects OpenGLES headers in libretro's rglgen (it does not look at TARGET_IPHONE).
+    defs="-DTARGET_NO_REC -DTARGET_IPHONE -DIOS"
 fi
 
 dest="$OUT/$platform"
@@ -129,10 +130,12 @@ fi
 cp -f "$found" "$dylib"
 install_name_tool -id "@rpath/flycast_libretro.dylib" "$dylib" || true
 
-if nm "$dylib" | grep -q 'Get_Sh4Recompiler'; then
+# The dylib exports only retro_* and is stripped, so the dynarec symbol lives in the
+# object file, not in `nm` of the finished library.
+has_rec=0
+rec_obj="$(find "$build" -name 'rec_arm64.cpp.o' -print -quit || true)"
+if [[ -n "$rec_obj" ]] && nm "$rec_obj" | grep -q 'Get_Sh4Recompiler'; then
     has_rec=1
-else
-    has_rec=0
 fi
 if [[ "$platform" == iphoneos && "$has_rec" == 1 ]]; then
     echo "iOS Flycast still contains Get_Sh4Recompiler. TARGET_NO_REC did not stick." >&2

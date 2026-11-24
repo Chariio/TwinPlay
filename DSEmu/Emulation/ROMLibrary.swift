@@ -277,7 +277,6 @@ final class ROMLibrary: ObservableObject {
     /// Copies a .gdi or .cue and the track files named inside it (and any companions the user picked).
     @discardableResult
     func importDiscSet(_ source: URL, companions: [URL] = []) throws -> String {
-        let ext = source.pathExtension.lowercased()
         let base = source.deletingPathExtension().lastPathComponent
         let dir = romsDirectory.appendingPathComponent(base, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

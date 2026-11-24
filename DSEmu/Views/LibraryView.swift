@@ -409,6 +409,68 @@ struct LibraryView: View {
         }
     }
 
+    @ViewBuilder private var libraryGames: some View {
+        if isCoverFlow {
+            coverFlowGames
+        } else if filterSystem == nil {
+            allSystemSections
+        } else {
+            oneSystemSection
+        }
+    }
+
+    @ViewBuilder private var coverFlowGames: some View {
+        let list = filterSystem == nil
+            ? GameSystem.allCases.flatMap { library.sorted(sort, search: search, system: $0) }
+            : library.sorted(sort, search: search, system: filterSystem)
+        if list.isEmpty {
+            if !library.entries.isEmpty {
+                Text(search.isEmpty ? String(localized: "No \(filterSystem?.label ?? "") games yet.") : String(localized: "No games match “\(search)”."))
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            CoverFlowView(entries: list,
+                          style: { (Store.allows(.coverFlow) ? ($0.styleOverride ?? tileStyle) : .boxArt) },
+                          onPlay: { open(rom: $0.url) },
+                          menu: { AnyView(menu(for: $0)) },
+                          focus: $padFocus)
+                .frame(height: shortLandscape ? max(220, viewportHeight - 58) : 540)
+        }
+    }
+
+    @ViewBuilder private var allSystemSections: some View {
+        ForEach(GameSystem.allCases) { sys in
+            systemSection(sys)
+        }
+        if !library.entries.isEmpty && library.sorted(sort, search: search).isEmpty {
+            Text("No games match “\(search)”.").foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private func systemSection(_ sys: GameSystem) -> some View {
+        let list = library.sorted(sort, search: search, system: sys)
+        if !list.isEmpty || (sys == .dreamcast && DreamcastNotice.showOnThisDevice) {
+            Text(sys.longName).font(.title3.weight(.bold))
+            if sys == .dreamcast { DreamcastDevicesNote() }
+            if list.isEmpty {
+                Text("No Dreamcast games yet. Use Add Games for .cdi, .gdi (and its tracks), .chd, .cue or .zip.")
+                    .foregroundStyle(.secondary)
+            } else {
+                grid(list)
+            }
+        }
+    }
+
+    @ViewBuilder private var oneSystemSection: some View {
+        if filterSystem == .dreamcast { DreamcastDevicesNote().padding(.bottom, 4) }
+        let list = library.sorted(sort, search: search, system: filterSystem)
+        if !library.entries.isEmpty && list.isEmpty {
+            Text(search.isEmpty ? String(localized: "No \(filterSystem?.label ?? "") games yet.") : String(localized: "No games match “\(search)”."))
+                .foregroundStyle(.secondary)
+        }
+        grid(list)
+    }
+
     private func systemChip(_ title: String, tag: String) -> some View {
         let on = systemFilter == tag
         return Button { systemFilter = tag } label: {
@@ -451,52 +513,7 @@ struct LibraryView: View {
                             .foregroundStyle(.secondary)
                         ExperimentalNotice(onReport: nil).frame(maxWidth: .infinity)
                     }
-                    if isCoverFlow {
-                        let list = filterSystem == nil
-                            ? GameSystem.allCases.flatMap { library.sorted(sort, search: search, system: $0) }
-                            : library.sorted(sort, search: search, system: filterSystem)
-                        if list.isEmpty {
-                            if !library.entries.isEmpty {
-                                Text(search.isEmpty ? String(localized: "No \(filterSystem?.label ?? "") games yet.") : String(localized: "No games match “\(search)”."))
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else {
-                            CoverFlowView(entries: list,
-                                          style: { (Store.allows(.coverFlow) ? ($0.styleOverride ?? tileStyle) : .boxArt) },
-                                          onPlay: { open(rom: $0.url) },
-                                          menu: { AnyView(menu(for: $0)) },
-                                          focus: $padFocus)
-                                // Portrait: the usual tall stage. Landscape phone: fill what is left
-                                // of the screen under the filter row so the Play button stays visible.
-                                .frame(height: shortLandscape ? max(220, viewportHeight - 58) : 540)
-                        }
-                    } else if filterSystem == nil {
-                        // "All": one section per system.
-                        ForEach(GameSystem.allCases) { sys in
-                            let list = library.sorted(sort, search: search, system: sys)
-                            if !list.isEmpty || (sys == .dreamcast && DreamcastNotice.showOnThisDevice) {
-                                Text(sys.longName).font(.title3.weight(.bold))
-                                if sys == .dreamcast { DreamcastDevicesNote() }
-                                if list.isEmpty {
-                                    Text("No Dreamcast games yet. Use Add Games for .cdi, .gdi (and its tracks), .chd, .cue or .zip.")
-                                        .foregroundStyle(.secondary)
-                                } else {
-                                    grid(list)
-                                }
-                            }
-                        }
-                        if !library.entries.isEmpty && library.sorted(sort, search: search).isEmpty {
-                            Text("No games match “\(search)”.").foregroundStyle(.secondary)
-                        }
-                    } else {
-                        if filterSystem == .dreamcast { DreamcastDevicesNote().padding(.bottom, 4) }
-                        let list = library.sorted(sort, search: search, system: filterSystem)
-                        if !library.entries.isEmpty && list.isEmpty {
-                            Text(search.isEmpty ? String(localized: "No \(filterSystem?.label ?? "") games yet.") : String(localized: "No games match “\(search)”."))
-                                .foregroundStyle(.secondary)
-                        }
-                        grid(list)
-                    }
+                    libraryGames
 
                     // Footer: experimental notice + report button, at the very bottom of the list.
                     if !library.entries.isEmpty {
