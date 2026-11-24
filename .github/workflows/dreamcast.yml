@@ -11,6 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # One macOS runner at a time. Asking for four at once gets jobs dropped with
+  # "not acquired by Runner of type hosted" while the pool is short.
   flycast-macos:
     name: Flycast macOS arm64 (dynarec)
     runs-on: macos-15
@@ -26,6 +28,7 @@ jobs:
 
   flycast-ios:
     name: Flycast iOS arm64 (interpreter, no JIT)
+    needs: flycast-macos
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +42,7 @@ jobs:
 
   twinplay-ios:
     name: TwinPlay iOS (signing off)
+    needs: flycast-ios
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +65,7 @@ jobs:
 
   twinplay-macos:
     name: TwinPlay macOS host (signing off)
+    needs: twinplay-ios
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
